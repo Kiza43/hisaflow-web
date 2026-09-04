@@ -1,0 +1,48 @@
+:root {
+  --bg: #faf9f7;
+  --surface: #ffffff;
+  --border: #e7e5e4;
+  --border-muted: #f0eeec;
+  --primary: #5b7f6a;
+  --primary-dark: #43614f;
+  --primary-light: #edf3ee;
+  --accent: #d99b3f;
+  --accent-light: #fbf1de;
+  --text-primary: #292524;
+  --text-secondary: #57534e;
+  --text-muted: #a8a29e;
+  --danger: #c1594a;
+  --danger-light: #fbeae7;
+  --success: #4c8065;
+  --success-light: #e9f3ed;
+  --warning: #c98a2e;
+  --warning-light: #fbf1de;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  overflow: hidden; /* the app manages its own scroll regions per-screen */
+}
+
+#root {
+  height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input {
+  font-family: inherit;
+}
