@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { dataService } from "../services/dataService";
-import ExpenditureFormModal from "../components/ExpenditureFormModal.jsx";
-import ExpenditureCard from "../components/ExpenditureCard.jsx";
+import { supplierService } from "../services/supplierService";
+import SupplierCard from "../components/SupplierCard.jsx";
+import SupplierFormModal from "../components/SupplierFormModal.jsx";
+import PaySupplierModal from "../components/PaySupplierModal.jsx";
 import ConfirmModal from "../components/ConfirmModal.jsx";
-import { activityLogService } from "../services/activityLogService";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const formatTZS = (amount) => {
@@ -11,60 +12,62 @@ const formatTZS = (amount) => {
   return "TZS " + Math.round(v).toLocaleString("en-US");
 };
 
-const ExpensesScreen = () => {
+const SuppliersScreen = () => {
   const { t } = useLanguage();
-  const [expenditures, setExpenditures] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [payingSupplier, setPayingSupplier] = useState(null);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
-  useEffect(() => {
-    dataService.getExpenditures().then((data) => {
-      setExpenditures(data);
+  const loadSuppliers = () =>
+    dataService.getSuppliers().then((data) => {
+      setSuppliers(data);
       setLoading(false);
     });
+
+  useEffect(() => {
+    loadSuppliers();
   }, []);
 
-  const handleSave = async (expenditure) => {
-    const updated = [...expenditures, expenditure];
-    setExpenditures(updated);
-    await dataService.saveExpenditures(updated);
-    setShowForm(false);
+  const handleAddSupplier = async (data) => {
+    const result = await supplierService.addSupplier(data);
+    if (result.success) await loadSuppliers();
+    return result;
   };
 
   const confirmDelete = async () => {
-    const removed = expenditures.find((exp) => exp.id === pendingDeleteId);
-    const updated = expenditures.filter((exp) => exp.id !== pendingDeleteId);
-    setExpenditures(updated);
-    await dataService.saveExpenditures(updated);
-    if (removed)
-      await activityLogService.logActivity(
-        "deleted an expense",
-        removed.description,
-      );
+    await supplierService.deleteSupplier(pendingDeleteId);
+    await loadSuppliers();
     setPendingDeleteId(null);
+  };
+
+  const handlePayment = async (supplierId, amount) => {
+    const result = await supplierService.recordPayment(supplierId, amount);
+    if (result.success) {
+      await loadSuppliers();
+      setPayingSupplier(null);
+    }
+    return result;
   };
 
   if (loading) return null;
 
-  const sorted = expenditures
-    .slice()
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
-  const totalThisList = expenditures.reduce(
-    (sum, exp) => sum + (exp.amount || 0),
+  const totalOwed = suppliers.reduce(
+    (sum, s) => sum + (s.totalSupplied - s.totalPaid),
     0,
   );
 
   return (
     <div style={styles.wrap}>
       <div style={styles.header}>
-        <h1 style={styles.title}>{t("navExpenses")}</h1>
+        <h1 style={styles.title}>{t("navSuppliers")}</h1>
         <button style={styles.addBtn} onClick={() => setShowForm(true)}>
-          {t("addExpenditureButton")}
+          {t("addSupplierButton")}
         </button>
       </div>
 
-      {expenditures.length > 0 && (
+      {suppliers.length > 0 && totalOwed > 0 && (
         <div style={styles.summaryBox}>
           <span
             style={{
@@ -73,46 +76,54 @@ const ExpensesScreen = () => {
               color: "var(--text-secondary)",
             }}
           >
-            {t("totalExpensesLabel")}
+            {t("totalOwedToSuppliersLabel")}
           </span>
           <span
             style={{ fontSize: 22, fontWeight: 800, color: "var(--danger)" }}
           >
-            {formatTZS(totalThisList)}
+            {formatTZS(totalOwed)}
           </span>
         </div>
       )}
 
-      {expenditures.length === 0 ? (
+      {suppliers.length === 0 ? (
         <div style={styles.emptyState}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>
-            {t("noExpensesYet")}
+            {t("noSuppliersYet")}
           </div>
           <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            {t("tapAddExpenditureHint")}
+            {t("tapAddSupplierHint")}
           </div>
         </div>
       ) : (
         <div style={styles.grid}>
-          {sorted.map((exp) => (
-            <ExpenditureCard
-              key={exp.id}
-              expenditure={exp}
+          {suppliers.map((s) => (
+            <SupplierCard
+              key={s.id}
+              supplier={s}
+              onPay={setPayingSupplier}
               onDelete={setPendingDeleteId}
             />
           ))}
         </div>
       )}
 
-      <ExpenditureFormModal
+      <SupplierFormModal
         visible={showForm}
-        onSave={handleSave}
+        onSave={handleAddSupplier}
         onClose={() => setShowForm(false)}
+      />
+
+      <PaySupplierModal
+        visible={!!payingSupplier}
+        supplier={payingSupplier}
+        onSave={handlePayment}
+        onClose={() => setPayingSupplier(null)}
       />
 
       <ConfirmModal
         visible={!!pendingDeleteId}
-        message={t("confirmDeleteExpenditure")}
+        message={t("confirmDeleteSupplier")}
         onConfirm={confirmDelete}
         onCancel={() => setPendingDeleteId(null)}
       />
@@ -140,7 +151,7 @@ const styles = {
     padding: "11px 18px",
     borderRadius: 12,
     border: "none",
-    background: "var(--danger)",
+    background: "var(--primary)",
     color: "white",
     fontWeight: 800,
     fontSize: 13,
@@ -168,4 +179,4 @@ const styles = {
   },
 };
 
-export default ExpensesScreen;
+export default SuppliersScreen;

@@ -22,7 +22,7 @@ const SaleCard = ({ sale }) => {
   const isProfit = profit >= 0;
 
   return (
-    <div style={styles.card}>
+    <div className="hf-card" style={styles.card}>
       <div style={styles.header}>
         <div style={{ flex: 1, paddingRight: 12 }}>
           <div style={styles.productName}>{sale.productName}</div>

@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { dataService } from "../services/dataService";
-import { salesService } from "../services/salesService";
 import SaleFormModal from "../components/SaleFormModal.jsx";
 import SaleCard from "../components/SaleCard.jsx";
+import ReceiptModal from "../components/ReceiptModal.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const SalesScreen = () => {
   const { t } = useLanguage();
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
+  const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [error, setError] = useState("");
+  const [receiptSale, setReceiptSale] = useState(null);
 
   const loadAll = async () => {
     const [p, s] = await Promise.all([
@@ -25,22 +26,8 @@ const SalesScreen = () => {
 
   useEffect(() => {
     loadAll();
+    dataService.getSettings().then(setSettings);
   }, []);
-
-  const handleCompleteSale = async ({ productId, quantity, sellingPrice }) => {
-    setError("");
-    const result = await salesService.completeSale({
-      productId,
-      quantity,
-      sellingPrice,
-    });
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-    await loadAll();
-    setShowForm(false);
-  };
 
   if (loading) return null;
 
@@ -57,11 +44,8 @@ const SalesScreen = () => {
         </button>
       </div>
 
-      {error && <div style={styles.error}>{error}</div>}
-
       {recentSales.length === 0 ? (
         <div style={styles.emptyState}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🧾</div>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>
             {t("noSalesYet")}
           </div>
@@ -82,11 +66,19 @@ const SalesScreen = () => {
       <SaleFormModal
         visible={showForm}
         products={products}
-        onSave={handleCompleteSale}
-        onClose={() => {
+        onCompleted={(saleData) => {
+          loadAll();
           setShowForm(false);
-          setError("");
+          setReceiptSale(saleData);
         }}
+        onClose={() => setShowForm(false)}
+      />
+
+      <ReceiptModal
+        visible={!!receiptSale}
+        sale={receiptSale}
+        settings={settings}
+        onClose={() => setReceiptSale(null)}
       />
     </div>
   );
@@ -116,15 +108,6 @@ const styles = {
     color: "white",
     fontWeight: 800,
     fontSize: 13,
-  },
-  error: {
-    background: "var(--danger-light)",
-    color: "var(--danger)",
-    fontSize: 13,
-    fontWeight: 600,
-    padding: "12px 16px",
-    borderRadius: 12,
-    marginBottom: 18,
   },
   emptyState: {
     background: "var(--surface)",

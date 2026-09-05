@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { salesService } from "../services/salesService";
+import { creditService } from "../services/creditService";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const formatTZS = (amount) => {
@@ -6,18 +8,25 @@ const formatTZS = (amount) => {
   return "TZS " + Math.round(v).toLocaleString("en-US");
 };
 
+// Handles completion internally now (cash or credit), same pattern as
+// CartModal — a single-product sale should be able to go on credit just
+// as easily as a cart of several, not a capability only the cart gets.
 const SaleFormModal = ({
   visible,
   products,
   preSelectedProductId,
-  onSave,
+  onCompleted,
   onClose,
 }) => {
   const { t } = useLanguage();
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [sellingPrice, setSellingPrice] = useState("");
+  const [paymentMode, setPaymentMode] = useState("cash");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [error, setError] = useState("");
+  const [completing, setCompleting] = useState(false);
 
   const selectedProduct = useMemo(
     () => products.find((p) => p.id === productId) || null,
@@ -62,23 +71,60 @@ const SaleFormModal = ({
       );
       return;
     }
-    const result = await onSave({
+
+    setCompleting(true);
+    const cartItem = {
       productId,
+      productName: selectedProduct.name,
+      unit: selectedProduct.unit,
       quantity: qtyNum,
       sellingPrice: priceNum,
-    });
-    // onSave may not return anything (SalesScreen handles its own error
-    // display) or may return { success, error } (quick-sell from a
-    // product card) — only act on it when it's actually there.
-    if (result && result.success === false) {
+    };
+    const result =
+      paymentMode === "credit"
+        ? await creditService.completeCreditSale({
+            cartItems: [cartItem],
+            customerName,
+            customerPhone,
+          })
+        : await salesService.completeSale({
+            productId,
+            quantity: qtyNum,
+            sellingPrice: priceNum,
+          });
+    setCompleting(false);
+
+    if (!result.success) {
       setError(result.error || t("saleFailedError"));
+      return;
     }
+
+    const saleData = {
+      items: [
+        {
+          productName: selectedProduct.name,
+          quantity: qtyNum,
+          sellingPrice: priceNum,
+        },
+      ],
+      total,
+      isCredit: paymentMode === "credit",
+      customerName,
+      customerPhone,
+      date: new Date().toISOString(),
+    };
+
+    handleClose();
+    onCompleted(saleData);
   };
 
   const handleClose = () => {
     setProductId("");
     setQuantity("1");
     setSellingPrice("");
+    setPaymentMode("cash");
+    setCustomerName("");
+    setCustomerPhone("");
     setError("");
     onClose();
   };
@@ -127,6 +173,44 @@ const SaleFormModal = ({
           </div>
         </div>
 
+        <div style={styles.modeRow}>
+          <button
+            style={{
+              ...styles.modeBtn,
+              ...(paymentMode === "cash" ? styles.modeBtnActive : {}),
+            }}
+            onClick={() => setPaymentMode("cash")}
+          >
+            {t("cashSaleLabel")}
+          </button>
+          <button
+            style={{
+              ...styles.modeBtn,
+              ...(paymentMode === "credit" ? styles.modeBtnActiveCredit : {}),
+            }}
+            onClick={() => setPaymentMode("credit")}
+          >
+            {t("creditSaleLabel")}
+          </button>
+        </div>
+
+        {paymentMode === "credit" && (
+          <div style={styles.customerFields}>
+            <input
+              style={styles.input}
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder={t("customerNamePlaceholder")}
+            />
+            <input
+              style={styles.input}
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              placeholder={t("customerPhonePlaceholder")}
+            />
+          </div>
+        )}
+
         {selectedProduct && (
           <div style={styles.totalBox}>
             <span
@@ -154,8 +238,19 @@ const SaleFormModal = ({
           <button style={styles.cancelBtn} onClick={handleClose}>
             {t("cancelButton")}
           </button>
-          <button style={styles.saveBtn} onClick={handleSubmit}>
-            {t("completeSaleButton")}
+          <button
+            style={{
+              ...styles.saveBtn,
+              ...(paymentMode === "credit" ? styles.saveBtnCredit : {}),
+            }}
+            disabled={completing}
+            onClick={handleSubmit}
+          >
+            {completing
+              ? t("completing")
+              : paymentMode === "credit"
+                ? t("completeCreditSaleButton")
+                : t("completeSaleButton")}
           </button>
         </div>
       </div>
@@ -178,6 +273,8 @@ const styles = {
     background: "var(--surface)",
     borderRadius: 20,
     padding: 28,
+    maxHeight: "90vh",
+    overflow: "auto",
   },
   title: { fontSize: 18, fontWeight: 800, marginBottom: 18 },
   error: {
@@ -208,6 +305,30 @@ const styles = {
     color: "var(--text-primary)",
   },
   row: { display: "flex", gap: 12 },
+  modeRow: { display: "flex", gap: 8, marginBottom: 12 },
+  modeBtn: {
+    flex: 1,
+    padding: "10px 0",
+    borderRadius: 12,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 700,
+    fontSize: 13,
+  },
+  modeBtnActive: {
+    background: "var(--primary-light)",
+    borderColor: "var(--primary)",
+    color: "var(--primary-dark)",
+  },
+  modeBtnActiveCredit: {
+    background: "var(--accent-light)",
+    borderColor: "var(--accent)",
+    color: "#8A5A1E",
+  },
+  customerFields: { display: "flex", flexDirection: "column", gap: 0 },
   totalBox: {
     display: "flex",
     justifyContent: "space-between",
@@ -238,6 +359,7 @@ const styles = {
     fontWeight: 800,
     fontSize: 14,
   },
+  saveBtnCredit: { background: "#8A5A1E" },
 };
 
 export default SaleFormModal;

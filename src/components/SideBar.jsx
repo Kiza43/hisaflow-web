@@ -2,22 +2,52 @@ import React from "react";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { dataService } from "../services/dataService";
 
+// Which permission (if any) each nav item needs — mirrors App.jsx's
+// SCREEN_PERMISSIONS map. A staff member without a given permission
+// simply never sees that item; the owner sees everything unconditionally.
+const NAV_PERMISSION = {
+  products: "manageProducts",
+  sales: "manageSales",
+  credit: "manageCredit",
+  customers: "manageCredit",
+  expenses: "manageExpenses",
+  suppliers: "manageSuppliers",
+  staff: "manageStaff",
+  activityLog: "manageStaff",
+  settings: "manageSettings",
+};
+
 const Sidebar = ({
   activeScreen,
   onNavigate,
   businessName,
   settings,
+  currentUser,
   onLogout,
 }) => {
   const { t, language, setLanguage } = useLanguage();
 
-  const NAV_ITEMS = [
-    { key: "dashboard", label: t("navDashboard"), icon: "📊" },
-    { key: "products", label: t("navProducts"), icon: "📦" },
-    { key: "sales", label: t("navSales"), icon: "🧾" },
-    { key: "credit", label: t("navCredit"), icon: "🤝" },
-    { key: "expenses", label: t("navExpenses"), icon: "💸" },
+  // Clean, text-first navigation — no icons. Wayfinding comes from a
+  // clear active-state indicator (a left accent bar), not a row of
+  // decorative glyphs competing for attention.
+  const ALL_NAV_ITEMS = [
+    { key: "dashboard", label: t("navDashboard") },
+    { key: "products", label: t("navProducts") },
+    { key: "sales", label: t("navSales") },
+    { key: "credit", label: t("navCredit") },
+    { key: "customers", label: t("navCustomers") },
+    { key: "expenses", label: t("navExpenses") },
+    { key: "suppliers", label: t("navSuppliers") },
+    { key: "staff", label: t("navStaff") },
+    { key: "activityLog", label: t("navActivityLog") },
+    { key: "settings", label: t("navSettings") },
   ];
+
+  const visibleNavItems = ALL_NAV_ITEMS.filter((item) => {
+    const required = NAV_PERMISSION[item.key];
+    if (!required) return true; // dashboard, always visible
+    return currentUser?.isOwner || !!currentUser?.permissions?.[required];
+  });
 
   const handleToggleLanguage = async () => {
     const next = language === "sw" ? "en" : "sw";
@@ -28,12 +58,20 @@ const Sidebar = ({
   return (
     <div style={styles.sidebar}>
       <div style={styles.brand}>
-        <div style={styles.brandMark}>🏪</div>
         <div style={styles.brandName}>{businessName || "HisaFlow"}</div>
       </div>
 
+      {currentUser && (
+        <div style={styles.userBadge}>
+          <div style={styles.userName}>{currentUser.name}</div>
+          <div style={styles.userRole}>
+            {currentUser.isOwner ? t("ownerRoleLabel") : t("staffRoleLabel")}
+          </div>
+        </div>
+      )}
+
       <nav style={styles.nav}>
-        {NAV_ITEMS.map((item) => (
+        {visibleNavItems.map((item) => (
           <button
             key={item.key}
             onClick={() => onNavigate(item.key)}
@@ -42,14 +80,13 @@ const Sidebar = ({
               ...(activeScreen === item.key ? styles.navItemActive : {}),
             }}
           >
-            <span style={{ marginRight: 10 }}>{item.icon}</span>
             {item.label}
           </button>
         ))}
       </nav>
 
       <button style={styles.langBtn} onClick={handleToggleLanguage}>
-        🌐 {language === "sw" ? "Kiswahili" : "English"}
+        {language === "sw" ? "Kiswahili" : "English"}
       </button>
       <button style={styles.logoutBtn} onClick={onLogout}>
         {t("logout")}
@@ -65,62 +102,65 @@ const styles = {
     borderRight: "1px solid var(--border-muted)",
     display: "flex",
     flexDirection: "column",
-    padding: "20px 14px",
+    padding: "24px 0",
   },
-  brand: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "0 8px",
-    marginBottom: 24,
+  brand: { padding: "0 20px", marginBottom: 20 },
+  brandName: {
+    fontSize: 15,
+    fontWeight: 700,
+    letterSpacing: "-0.01em",
+    color: "var(--text-primary)",
   },
-  brandMark: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    background: "var(--primary-light)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 16,
+  userBadge: {
+    padding: "0 20px 16px",
+    marginBottom: 12,
+    borderBottom: "1px solid var(--border-muted)",
   },
-  brandName: { fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em" },
-  nav: { flex: 1, display: "flex", flexDirection: "column", gap: 4 },
+  userName: {
+    fontSize: 13,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  userRole: { fontSize: 11, color: "var(--text-muted)", marginTop: 2 },
+  nav: { flex: 1, display: "flex", flexDirection: "column" },
   navItem: {
-    display: "flex",
-    alignItems: "center",
+    display: "block",
     textAlign: "left",
-    padding: "11px 12px",
-    borderRadius: 12,
+    width: "100%",
+    padding: "10px 20px",
     border: "none",
+    borderLeft: "3px solid transparent",
     background: "transparent",
     color: "var(--text-secondary)",
-    fontSize: 14,
-    fontWeight: 700,
+    fontSize: 13,
+    fontWeight: 600,
   },
   navItemActive: {
-    background: "var(--primary-light)",
-    color: "var(--primary-dark)",
+    background: "var(--bg)",
+    color: "var(--text-primary)",
+    borderLeft: "3px solid var(--primary)",
+    fontWeight: 700,
   },
   langBtn: {
     textAlign: "left",
-    padding: "10px 12px",
-    border: "1px solid var(--border-muted)",
-    borderRadius: 10,
-    background: "var(--bg)",
+    padding: "10px 20px",
+    border: "none",
+    borderTop: "1px solid var(--border-muted)",
+    background: "transparent",
     color: "var(--text-secondary)",
     fontSize: 12,
-    fontWeight: 700,
-    marginBottom: 8,
+    fontWeight: 600,
   },
   logoutBtn: {
     textAlign: "left",
-    padding: "11px 12px",
+    padding: "10px 20px",
     border: "none",
     background: "transparent",
     color: "var(--text-muted)",
-    fontSize: 13,
-    fontWeight: 700,
+    fontSize: 12,
+    fontWeight: 600,
   },
 };
 

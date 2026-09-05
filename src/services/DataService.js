@@ -17,6 +17,15 @@ export const dataService = {
   saveExpenditures: (expenditures) =>
     window.hisaflow.saveExpenditures(expenditures),
 
+  getSuppliers: () => window.hisaflow.getSuppliers(),
+  saveSuppliers: (suppliers) => window.hisaflow.saveSuppliers(suppliers),
+
+  getStaff: () => window.hisaflow.getStaff(),
+  saveStaff: (staff) => window.hisaflow.saveStaff(staff),
+
+  getActivityLog: () => window.hisaflow.getActivityLog(),
+  saveActivityLog: (log) => window.hisaflow.saveActivityLog(log),
+
   getSettings: () => window.hisaflow.getSettings(),
   saveSettings: (settings) => window.hisaflow.saveSettings(settings),
 };

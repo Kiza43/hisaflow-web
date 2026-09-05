@@ -3,6 +3,9 @@ import { dataService } from "../services/dataService";
 import { creditService } from "../services/creditService";
 import RecordPaymentModal from "../components/RecordPaymentModal.jsx";
 import CreditCard from "../components/CreditCard.jsx";
+import ConfirmModal from "../components/ConfirmModal.jsx";
+import RemindCustomerModal from "../components/RemindCustomerModal.jsx";
+import PaymentReceiptModal from "../components/PaymentReceiptModal.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const formatTZS = (amount) => {
@@ -13,8 +16,12 @@ const formatTZS = (amount) => {
 const CreditScreen = () => {
   const { t } = useLanguage();
   const [creditSales, setCreditSales] = useState([]);
+  const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
   const [payingCreditSale, setPayingCreditSale] = useState(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [remindingCreditSale, setRemindingCreditSale] = useState(null);
+  const [paymentReceipt, setPaymentReceipt] = useState(null);
 
   const loadCreditSales = () =>
     dataService.getCreditSales().then((data) => {
@@ -24,23 +31,36 @@ const CreditScreen = () => {
 
   useEffect(() => {
     loadCreditSales();
+    dataService.getSettings().then(setSettings);
   }, []);
 
   const handleRecordPayment = async (creditSaleId, amount) => {
     const result = await creditService.recordPayment(creditSaleId, amount);
     if (result.success) {
+      const target = payingCreditSale;
       await loadCreditSales();
       setPayingCreditSale(null);
+      if (target) {
+        const amountPaidAfter = target.amountPaid + amount;
+        setPaymentReceipt({
+          customerName: target.customerName,
+          customerPhone: target.customerPhone,
+          items: target.items,
+          paymentAmount: amount,
+          totalAmount: target.totalAmount,
+          amountPaidAfter,
+          remainingAmount: target.totalAmount - amountPaidAfter,
+          date: new Date().toISOString(),
+        });
+      }
     }
     return result;
   };
 
-  const handleDelete = async (creditSaleId) => {
-    if (!window.confirm(t("confirmDeleteCreditSale"))) return;
-    const result = await creditService.deleteCreditSale(creditSaleId);
-    if (result.success) {
-      await loadCreditSales();
-    }
+  const confirmDelete = async () => {
+    const result = await creditService.deleteCreditSale(pendingDeleteId);
+    if (result.success) await loadCreditSales();
+    setPendingDeleteId(null);
   };
 
   if (loading) return null;
@@ -78,7 +98,6 @@ const CreditScreen = () => {
 
       {creditSales.length === 0 ? (
         <div style={styles.emptyState}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🤝</div>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>
             {t("noCreditSalesYet")}
           </div>
@@ -96,7 +115,8 @@ const CreditScreen = () => {
                 key={cs.id}
                 creditSale={cs}
                 onPayment={setPayingCreditSale}
-                onDelete={handleDelete}
+                onDelete={setPendingDeleteId}
+                onRemindCustomer={setRemindingCreditSale}
               />
             ))}
         </div>
@@ -107,6 +127,27 @@ const CreditScreen = () => {
         creditSale={payingCreditSale}
         onSave={handleRecordPayment}
         onClose={() => setPayingCreditSale(null)}
+      />
+
+      <ConfirmModal
+        visible={!!pendingDeleteId}
+        message={t("confirmDeleteCreditSale")}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDeleteId(null)}
+      />
+
+      <RemindCustomerModal
+        visible={!!remindingCreditSale}
+        customerName={remindingCreditSale?.customerName}
+        customerPhone={remindingCreditSale?.customerPhone}
+        onClose={() => setRemindingCreditSale(null)}
+      />
+
+      <PaymentReceiptModal
+        visible={!!paymentReceipt}
+        payment={paymentReceipt}
+        businessName={settings.businessName}
+        onClose={() => setPaymentReceipt(null)}
       />
     </div>
   );

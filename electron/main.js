@@ -1,4 +1,11 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  clipboard,
+  nativeImage,
+} = require("electron");
 const path = require("path");
 const { store } = require("./store");
 
@@ -60,6 +67,36 @@ ipcMain.handle("data:getExpenditures", () => store.getExpenditures());
 ipcMain.handle("data:saveExpenditures", (event, expenditures) =>
   store.saveExpenditures(expenditures),
 );
+
+ipcMain.handle("data:getSuppliers", () => store.getSuppliers());
+ipcMain.handle("data:saveSuppliers", (event, suppliers) =>
+  store.saveSuppliers(suppliers),
+);
+
+ipcMain.handle("data:getStaff", () => store.getStaff());
+ipcMain.handle("data:saveStaff", (event, staff) => store.saveStaff(staff));
+
+ipcMain.handle("data:getActivityLog", () => store.getActivityLog());
+ipcMain.handle("data:saveActivityLog", (event, log) =>
+  store.saveActivityLog(log),
+);
+
+// Opens a URL in the user's actual default browser (or, for wa.me links,
+// straight into WhatsApp Desktop if it's installed and registered as the
+// handler) — this is real, warranted use of Electron's native shell
+// module. A sandboxed renderer navigating itself to an external site
+// isn't the right approach and often won't behave the way a real browser
+// tab would.
+ipcMain.handle("shell:openExternal", (event, url) => shell.openExternal(url));
+
+// Writes a PNG (as a data URL) straight to the OS clipboard — real,
+// native Electron capability, not something achievable from a sandboxed
+// web page. This is what makes "paste this poster into WhatsApp/Facebook"
+// a single click instead of download-then-manually-attach.
+ipcMain.handle("clipboard:writeImage", (event, dataUrl) => {
+  const image = nativeImage.createFromDataURL(dataUrl);
+  clipboard.writeImage(image);
+});
 
 ipcMain.handle("data:getSettings", () => store.getSettings());
 ipcMain.handle("data:saveSettings", (event, settings) =>

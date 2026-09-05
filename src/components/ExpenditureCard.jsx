@@ -36,7 +36,7 @@ const ExpenditureCard = ({ expenditure, onDelete }) => {
   };
 
   return (
-    <div style={styles.card}>
+    <div className="hf-card" style={styles.card}>
       <div style={styles.header}>
         <div style={{ flex: 1, paddingRight: 12 }}>
           <div style={styles.description}>{expenditure.description}</div>

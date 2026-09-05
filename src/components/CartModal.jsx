@@ -40,11 +40,25 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
       setError(result.error);
       return;
     }
+
+    const saleData = {
+      items: items.map((item) => ({
+        productName: item.productName,
+        quantity: item.quantity,
+        sellingPrice: item.sellingPrice,
+      })),
+      total: totalAmount,
+      isCredit: paymentMode === "credit",
+      customerName,
+      customerPhone,
+      date: new Date().toISOString(),
+    };
+
     clearCart();
     setCustomerName("");
     setCustomerPhone("");
     setPaymentMode("cash");
-    onCompleted();
+    onCompleted(saleData);
   };
 
   return (
@@ -53,7 +67,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
         <div style={styles.header}>
           <h2 style={styles.title}>{t("yourCartTitle")}</h2>
           <button style={styles.closeBtn} onClick={onClose}>
-            ✕
+            Close
           </button>
         </div>
 
@@ -65,40 +79,45 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
           <div style={styles.itemList}>
             {items.map((item) => (
               <div key={item.productId} style={styles.item}>
-                <div style={{ flex: 1 }}>
-                  <div style={styles.itemName}>{item.productName}</div>
-                  <div style={styles.itemPrice}>
-                    {formatTZS(item.sellingPrice)} / {item.unit}
+                <div style={styles.itemTopRow}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={styles.itemName}>{item.productName}</div>
+                    <div style={styles.itemPrice}>
+                      {formatTZS(item.sellingPrice)} / {item.unit}
+                    </div>
+                  </div>
+                  <div style={styles.itemTotal}>
+                    {formatTZS(item.sellingPrice * item.quantity)}
                   </div>
                 </div>
-                <div style={styles.qtyControls}>
+                <div style={styles.itemBottomRow}>
+                  <div style={styles.qtyControls}>
+                    <span style={styles.qtyLabel}>{t("tableQuantity")}</span>
+                    <button
+                      style={styles.qtyBtn}
+                      onClick={() =>
+                        updateQuantity(item.productId, item.quantity - 1)
+                      }
+                    >
+                      −
+                    </button>
+                    <span style={styles.qtyValue}>{item.quantity}</span>
+                    <button
+                      style={styles.qtyBtn}
+                      onClick={() =>
+                        updateQuantity(item.productId, item.quantity + 1)
+                      }
+                    >
+                      +
+                    </button>
+                  </div>
                   <button
-                    style={styles.qtyBtn}
-                    onClick={() =>
-                      updateQuantity(item.productId, item.quantity - 1)
-                    }
+                    style={styles.removeBtn}
+                    onClick={() => removeFromCart(item.productId)}
                   >
-                    −
-                  </button>
-                  <span style={styles.qtyValue}>{item.quantity}</span>
-                  <button
-                    style={styles.qtyBtn}
-                    onClick={() =>
-                      updateQuantity(item.productId, item.quantity + 1)
-                    }
-                  >
-                    +
+                    {t("deleteButton")}
                   </button>
                 </div>
-                <div style={styles.itemTotal}>
-                  {formatTZS(item.sellingPrice * item.quantity)}
-                </div>
-                <button
-                  style={styles.removeBtn}
-                  onClick={() => removeFromCart(item.productId)}
-                >
-                  🗑️
-                </button>
               </div>
             ))}
           </div>
@@ -192,8 +211,8 @@ const styles = {
     zIndex: 50,
   },
   modal: {
-    width: 460,
-    maxHeight: "80vh",
+    width: 480,
+    maxHeight: "82vh",
     background: "var(--surface)",
     borderRadius: 20,
     padding: 24,
@@ -230,37 +249,63 @@ const styles = {
   },
   itemList: { overflow: "auto", marginBottom: 16 },
   item: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "10px 0",
+    padding: "12px 0",
     borderBottom: "1px solid var(--border-muted)",
+  },
+  itemTopRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 10,
   },
   itemName: { fontSize: 14, fontWeight: 700 },
   itemPrice: { fontSize: 12, color: "var(--text-muted)", marginTop: 2 },
-  qtyControls: { display: "flex", alignItems: "center", gap: 8 },
-  qtyBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    border: "1px solid var(--border)",
+  itemBottomRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  qtyControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
     background: "var(--bg)",
-    fontSize: 14,
+    borderRadius: 12,
+    padding: "6px 10px",
+  },
+  qtyLabel: {
+    fontSize: 11,
     fontWeight: 700,
+    color: "var(--text-muted)",
+    marginRight: 2,
+  },
+  qtyBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    fontSize: 16,
+    fontWeight: 700,
+    color: "var(--text-primary)",
   },
   qtyValue: {
-    fontSize: 14,
-    fontWeight: 700,
-    minWidth: 20,
+    fontSize: 15,
+    fontWeight: 800,
+    minWidth: 24,
     textAlign: "center",
   },
-  itemTotal: {
-    fontSize: 13,
+  itemTotal: { fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" },
+  removeBtn: {
+    background: "none",
+    border: "none",
+    fontSize: 12,
     fontWeight: 700,
-    minWidth: 80,
-    textAlign: "right",
+    color: "var(--danger)",
+    padding: "6px 10px",
   },
-  removeBtn: { background: "none", border: "none", fontSize: 13 },
   totalRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -274,7 +319,9 @@ const styles = {
     flex: 1,
     padding: "10px 0",
     borderRadius: 12,
-    border: "1.5px solid var(--border)",
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
     background: "var(--surface)",
     color: "var(--text-secondary)",
     fontWeight: 700,

@@ -48,6 +48,15 @@ const store = {
   getExpenditures: () => readFile("expenditures", []),
   saveExpenditures: (expenditures) => writeFile("expenditures", expenditures),
 
+  getSuppliers: () => readFile("suppliers", []),
+  saveSuppliers: (suppliers) => writeFile("suppliers", suppliers),
+
+  getStaff: () => readFile("staff", []),
+  saveStaff: (staff) => writeFile("staff", staff),
+
+  getActivityLog: () => readFile("activityLog", []),
+  saveActivityLog: (log) => writeFile("activityLog", log),
+
   getSettings: () =>
     readFile("settings", { businessName: "", ownerPin: "", ownerPhone: "" }),
   saveSettings: (settings) => writeFile("settings", settings),

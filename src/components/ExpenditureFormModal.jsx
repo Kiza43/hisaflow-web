@@ -156,7 +156,9 @@ const styles = {
   typeOption: {
     padding: "9px 0",
     borderRadius: 10,
-    border: "1.5px solid var(--border)",
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
     background: "var(--surface)",
     color: "var(--text-secondary)",
     fontWeight: 700,

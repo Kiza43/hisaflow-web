@@ -1,24 +1,15 @@
 import { dataService } from "./dataService";
+import { batchService } from "./batchService";
+import { activityLogService } from "./activityLogService";
 
-// Adding stock isn't just "increase the number" — the buying price of the
-// new batch is usually different from what's already on the shelf, so the
-// product's averageBuyingPrice needs a proper weighted recalculation.
-// Buying at 500 then again at 600 doesn't make the product cost 600 — it
-// makes it cost somewhere between the two, weighted by how much of each.
-const recalculateAveragePrice = (
-  currentStock,
-  currentAvgPrice,
-  addedQuantity,
-  newBuyingPrice,
-) => {
-  const totalStock = currentStock + addedQuantity;
-  if (totalStock <= 0) return newBuyingPrice;
-  return (
-    (currentStock * currentAvgPrice + addedQuantity * newBuyingPrice) /
-    totalStock
-  );
-};
+const formatTZS = (amount) =>
+  "TZS " + Math.round(amount || 0).toLocaleString("en-US");
 
+// Adding stock now creates a genuinely new batch via batchService.addBatch
+// rather than blending into one running average — this is what makes it
+// possible for salesService to later know the real, specific cost of the
+// units it's selling (FIFO), not just an average that drifts from reality
+// as prices change over time.
 export const restockService = {
   async addStock({ productId, quantity, buyingPrice }) {
     if (quantity <= 0) {
@@ -31,21 +22,15 @@ export const restockService = {
       return { success: false, error: "Bidhaa haipatikani" };
     }
 
-    const currentStock = product.stock || 0;
-    const currentAvgPrice = product.buyingPrice || 0;
-    const newAvgPrice = recalculateAveragePrice(
-      currentStock,
-      currentAvgPrice,
-      quantity,
-      buyingPrice,
-    );
-
     const updatedProducts = products.map((p) =>
-      p.id === productId
-        ? { ...p, stock: currentStock + quantity, buyingPrice: newAvgPrice }
-        : p,
+      p.id === productId ? batchService.addBatch(p, quantity, buyingPrice) : p,
     );
     await dataService.saveProducts(updatedProducts);
+
+    await activityLogService.logActivity(
+      "added stock",
+      `${product.name} +${quantity} @ ${formatTZS(buyingPrice)}`,
+    );
 
     return { success: true };
   },
@@ -68,27 +53,18 @@ export const restockService = {
     }
 
     const products = await dataService.getProducts();
-    const productMap = new Map(products.map((p) => [p.id, p]));
 
     const updatedProducts = products.map((p) => {
       const cartItem = cartItems.find((item) => item.productId === p.id);
       if (!cartItem) return p;
-      const currentStock = p.stock || 0;
-      const currentAvgPrice = p.buyingPrice || 0;
-      const newAvgPrice = recalculateAveragePrice(
-        currentStock,
-        currentAvgPrice,
-        cartItem.quantity,
-        cartItem.buyingPrice,
-      );
-      return {
-        ...p,
-        stock: currentStock + cartItem.quantity,
-        buyingPrice: newAvgPrice,
-      };
+      return batchService.addBatch(p, cartItem.quantity, cartItem.buyingPrice);
     });
 
     await dataService.saveProducts(updatedProducts);
+    await activityLogService.logActivity(
+      "restocked multiple products",
+      `${cartItems.length} bidhaa`,
+    );
     return { success: true };
   },
 };

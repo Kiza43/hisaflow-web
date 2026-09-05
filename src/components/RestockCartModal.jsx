@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRestockCart } from "../context/RestockCartContext.jsx";
 import { restockService } from "../services/restockService";
+import { supplierService } from "../services/supplierService";
+import { dataService } from "../services/dataService";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const formatTZS = (amount) => {
@@ -18,8 +20,15 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
     totalCost,
   } = useRestockCart();
   const { t } = useLanguage();
+  const [suppliers, setSuppliers] = useState([]);
+  const [supplierId, setSupplierId] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("paid");
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (visible) dataService.getSuppliers().then(setSuppliers);
+  }, [visible]);
 
   if (!visible) return null;
 
@@ -27,13 +36,21 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
     setError("");
     setCompleting(true);
     const result = await restockService.completeRestockCart(items);
-    setCompleting(false);
 
     if (!result.success) {
+      setCompleting(false);
       setError(result.error);
       return;
     }
+
+    if (supplierId && paymentStatus === "credit") {
+      await supplierService.recordSupply(supplierId, totalCost);
+    }
+
+    setCompleting(false);
     clearRestockCart();
+    setSupplierId("");
+    setPaymentStatus("paid");
     onCompleted();
   };
 
@@ -43,7 +60,7 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
         <div style={styles.header}>
           <h2 style={styles.title}>{t("restockCartTitle")}</h2>
           <button style={styles.closeBtn} onClick={onClose}>
-            ✕
+            Close
           </button>
         </div>
 
@@ -61,7 +78,7 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
                     style={styles.removeBtn}
                     onClick={() => removeFromRestockCart(item.productId)}
                   >
-                    🗑️
+                    Remove
                   </button>
                 </div>
                 <div style={styles.itemRow}>
@@ -109,6 +126,53 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
           </div>
         )}
 
+        {items.length > 0 && suppliers.length > 0 && (
+          <div style={{ marginBottom: 4 }}>
+            <label style={styles.fieldLabel}>
+              {t("supplierOptionalLabel")}
+            </label>
+            <select
+              style={styles.fieldInput}
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+            >
+              <option value="">{t("noSupplierOption")}</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+
+            {supplierId && (
+              <div style={styles.paymentToggleRow}>
+                <button
+                  style={{
+                    ...styles.paymentToggle,
+                    ...(paymentStatus === "paid"
+                      ? styles.paymentToggleActive
+                      : {}),
+                  }}
+                  onClick={() => setPaymentStatus("paid")}
+                >
+                  {t("paidNowOption")}
+                </button>
+                <button
+                  style={{
+                    ...styles.paymentToggle,
+                    ...(paymentStatus === "credit"
+                      ? styles.paymentToggleActiveCredit
+                      : {}),
+                  }}
+                  onClick={() => setPaymentStatus("credit")}
+                >
+                  {t("oweSupplierOption")}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {items.length > 0 && (
           <>
             <div style={styles.totalRow}>
@@ -145,7 +209,7 @@ const styles = {
   },
   modal: {
     width: 500,
-    maxHeight: "80vh",
+    maxHeight: "85vh",
     background: "var(--surface)",
     borderRadius: 20,
     padding: 24,
@@ -206,6 +270,30 @@ const styles = {
     fontSize: 13,
     fontWeight: 600,
     background: "var(--bg)",
+    marginBottom: 10,
+  },
+  paymentToggleRow: { display: "flex", gap: 8, marginBottom: 10 },
+  paymentToggle: {
+    flex: 1,
+    padding: "9px 0",
+    borderRadius: 10,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 700,
+    fontSize: 12,
+  },
+  paymentToggleActive: {
+    background: "var(--success-light)",
+    borderColor: "var(--success)",
+    color: "var(--success)",
+  },
+  paymentToggleActiveCredit: {
+    background: "var(--danger-light)",
+    borderColor: "var(--danger)",
+    color: "var(--danger)",
   },
   itemTotal: { fontSize: 13, fontWeight: 700, padding: "8px 0" },
   totalRow: {

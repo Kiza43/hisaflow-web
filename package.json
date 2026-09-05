@@ -11,8 +11,9 @@
     "package": "npm run build && electron-builder"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
@@ -26,7 +27,12 @@
   "build": {
     "appId": "com.fortyscales.hisaflowdesktop",
     "productName": "HisaFlow",
-    "files": ["dist/**/*", "electron/**/*"],
-    "directories": { "output": "release" }
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    }
   }
 }

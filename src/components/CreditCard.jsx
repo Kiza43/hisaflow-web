@@ -29,7 +29,7 @@ const itemSummary = (creditSale) => {
   return `${items[0].productName} +${items.length - 1} zaidi`;
 };
 
-const CreditCard = ({ creditSale, onPayment, onDelete }) => {
+const CreditCard = ({ creditSale, onPayment, onDelete, onRemindCustomer }) => {
   const { t } = useLanguage();
   const remaining = creditSale.totalAmount - creditSale.amountPaid;
   const status = statusStyle(creditSale.status);
@@ -41,7 +41,7 @@ const CreditCard = ({ creditSale, onPayment, onDelete }) => {
   };
 
   return (
-    <div style={styles.card}>
+    <div className="hf-card" style={styles.card}>
       <div style={styles.header}>
         <div style={{ flex: 1, paddingRight: 12 }}>
           <div style={styles.customerName}>{creditSale.customerName}</div>
@@ -102,6 +102,14 @@ const CreditCard = ({ creditSale, onPayment, onDelete }) => {
       </div>
 
       <div style={styles.actions}>
+        {creditSale.customerPhone && onRemindCustomer && (
+          <button
+            style={styles.remindBtn}
+            onClick={() => onRemindCustomer(creditSale)}
+          >
+            {t("sendReminderButton")}
+          </button>
+        )}
         {creditSale.status !== "paid" && (
           <button style={styles.payBtn} onClick={() => onPayment(creditSale)}>
             {t("recordPaymentButton")}
@@ -147,6 +155,15 @@ const styles = {
   rowLabel: { fontSize: 13, color: "var(--text-secondary)" },
   rowValue: { fontSize: 13, fontWeight: 600 },
   actions: { display: "flex", gap: 8 },
+  remindBtn: {
+    padding: "0 14px",
+    borderRadius: 12,
+    border: "1.5px solid var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 700,
+    fontSize: 12,
+  },
   payBtn: {
     flex: 1,
     padding: 12,

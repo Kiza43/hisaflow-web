@@ -41,8 +41,84 @@ body {
 button {
   font-family: inherit;
   cursor: pointer;
+  transition:
+    transform 0.1s ease,
+    opacity 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+button:disabled {
+  cursor: default;
+}
+
+input,
+select {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.hf-card {
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.hf-card:hover {
+  box-shadow: 0 4px 16px rgba(41, 37, 34, 0.08);
+  transform: translateY(-1px);
 }
 
 input {
   font-family: inherit;
+}
+
+/* Receipt printing — hides the whole app UI, shows only the receipt.
+   #receipt-print-area is toggled onto the DOM only while a receipt is
+   open, so this rule has no effect the rest of the time. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #receipt-print-area,
+  #receipt-print-area * {
+    visibility: visible;
+  }
+  #receipt-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
 }
