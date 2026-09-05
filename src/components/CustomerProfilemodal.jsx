@@ -52,9 +52,9 @@ const CustomerProfileModal = ({
     await whatsappService.sendMessage(customer.phone, message);
   };
 
-  const handleSavePayment = async (creditSaleId, amount) => {
+  const handleSavePayment = async (creditSaleId, amount, paymentMethod) => {
     const target = payingCreditSale;
-    const result = await onRecordPayment(creditSaleId, amount);
+    const result = await onRecordPayment(creditSaleId, amount, paymentMethod);
     if (result.success) {
       setPayingCreditSale(null);
       const amountPaidAfter = target.amountPaid + amount;
@@ -63,6 +63,7 @@ const CustomerProfileModal = ({
         customerPhone: target.customerPhone,
         items: target.items,
         paymentAmount: amount,
+        paymentMethod,
         totalAmount: target.totalAmount,
         amountPaidAfter,
         remainingAmount: target.totalAmount - amountPaidAfter,

@@ -11,9 +11,19 @@ const formatTZS = (amount) =>
 // units it's selling (FIFO), not just an average that drifts from reality
 // as prices change over time.
 export const restockService = {
-  async addStock({ productId, quantity, buyingPrice }) {
+  async addStock({
+    productId,
+    quantity,
+    buyingPrice,
+    supplierId,
+    supplierName,
+    paymentMethod,
+  }) {
     if (quantity <= 0) {
       return { success: false, error: "Weka kiasi sahihi" };
+    }
+    if (buyingPrice < 0) {
+      return { success: false, error: "Bei ya kununua haiwezi kuwa hasi" };
     }
 
     const products = await dataService.getProducts();
@@ -23,7 +33,13 @@ export const restockService = {
     }
 
     const updatedProducts = products.map((p) =>
-      p.id === productId ? batchService.addBatch(p, quantity, buyingPrice) : p,
+      p.id === productId
+        ? batchService.addBatch(p, quantity, buyingPrice, undefined, {
+            supplierId,
+            supplierName,
+            paymentMethod,
+          })
+        : p,
     );
     await dataService.saveProducts(updatedProducts);
 
@@ -39,7 +55,7 @@ export const restockService = {
   // covering several products is one business event (one delivery, one
   // supplier trip), so it should commit completely or not at all, not
   // partially apply if something's wrong with one line item.
-  async completeRestockCart(cartItems) {
+  async completeRestockCart(cartItems, meta = {}) {
     if (!cartItems || cartItems.length === 0) {
       return { success: false, error: "Hakuna bidhaa kwenye kikapu" };
     }
@@ -50,6 +66,12 @@ export const restockService = {
           error: `${item.productName}: weka kiasi sahihi`,
         };
       }
+      if (item.buyingPrice < 0) {
+        return {
+          success: false,
+          error: `${item.productName}: bei ya kununua haiwezi kuwa hasi`,
+        };
+      }
     }
 
     const products = await dataService.getProducts();
@@ -57,7 +79,13 @@ export const restockService = {
     const updatedProducts = products.map((p) => {
       const cartItem = cartItems.find((item) => item.productId === p.id);
       if (!cartItem) return p;
-      return batchService.addBatch(p, cartItem.quantity, cartItem.buyingPrice);
+      return batchService.addBatch(
+        p,
+        cartItem.quantity,
+        cartItem.buyingPrice,
+        undefined,
+        meta,
+      );
     });
 
     await dataService.saveProducts(updatedProducts);

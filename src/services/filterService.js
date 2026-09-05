@@ -22,6 +22,10 @@ export const filterService = {
       result = result.filter((p) => p.category === filters.category);
     }
 
+    if (filters.brand && filters.brand !== "all") {
+      result = result.filter((p) => p.brand === filters.brand);
+    }
+
     if (filters.stockStatus === "low-stock") {
       result = result.filter(
         (p) => (p.stock || 0) > 0 && (p.stock || 0) <= lowStockThreshold,
@@ -56,6 +60,14 @@ export const filterService = {
   // that exist, not a fixed list that may not match reality.
   getCategories(products) {
     const set = new Set(products.map((p) => p.category).filter(Boolean));
+    return Array.from(set).sort();
+  },
+
+  // Same reasoning as getCategories — only ever offer brands that
+  // actually exist among current products, e.g. distinguishing
+  // Kilimanjaro vs Uhai within the same "Water" category.
+  getBrands(products) {
+    const set = new Set(products.map((p) => p.brand).filter(Boolean));
     return Array.from(set).sort();
   },
 };

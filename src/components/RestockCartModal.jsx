@@ -3,7 +3,15 @@ import { useRestockCart } from "../context/RestockCartContext.jsx";
 import { restockService } from "../services/restockService";
 import { supplierService } from "../services/supplierService";
 import { dataService } from "../services/dataService";
+import SupplierPicker from "./SupplierPicker.jsx";
+import RestockCartItemRow from "./RestockCartItemRow.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
+
+const PAYMENT_METHODS = [
+  { value: "cash", labelKey: "cashMethodOption" },
+  { value: "bank_transfer", labelKey: "bankTransferMethodOption" },
+  { value: "lipa_namba", labelKey: "lipaNambaMethodOption" },
+];
 
 const formatTZS = (amount) => {
   const v = typeof amount === "number" && !isNaN(amount) ? amount : 0;
@@ -23,6 +31,7 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
   const [suppliers, setSuppliers] = useState([]);
   const [supplierId, setSupplierId] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("paid");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState("");
 
@@ -35,23 +44,34 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
   const handleComplete = async () => {
     setError("");
     setCompleting(true);
-    const result = await restockService.completeRestockCart(items);
+    try {
+      const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+      const result = await restockService.completeRestockCart(items, {
+        supplierId: supplierId || null,
+        supplierName: selectedSupplier?.name || "",
+        paymentMethod: paymentStatus === "paid" ? paymentMethod : "",
+      });
 
-    if (!result.success) {
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      if (supplierId && paymentStatus === "credit") {
+        await supplierService.recordSupply(supplierId, totalCost);
+      }
+
+      clearRestockCart();
+      setSupplierId("");
+      setPaymentStatus("paid");
+      setPaymentMethod("cash");
+      onCompleted();
+    } catch (err) {
+      console.error("Restock completion error:", err);
+      setError(t("unexpectedErrorTryAgain"));
+    } finally {
       setCompleting(false);
-      setError(result.error);
-      return;
     }
-
-    if (supplierId && paymentStatus === "credit") {
-      await supplierService.recordSupply(supplierId, totalCost);
-    }
-
-    setCompleting(false);
-    clearRestockCart();
-    setSupplierId("");
-    setPaymentStatus("paid");
-    onCompleted();
   };
 
   return (
@@ -71,78 +91,31 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
         ) : (
           <div style={styles.itemList}>
             {items.map((item) => (
-              <div key={item.productId} style={styles.item}>
-                <div style={styles.itemTop}>
-                  <span style={styles.itemName}>{item.productName}</span>
-                  <button
-                    style={styles.removeBtn}
-                    onClick={() => removeFromRestockCart(item.productId)}
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div style={styles.itemRow}>
-                  <div style={{ flex: 1 }}>
-                    <label style={styles.fieldLabel}>
-                      {t("addStockQuantityLabel")}
-                    </label>
-                    <input
-                      type="number"
-                      style={styles.fieldInput}
-                      value={item.quantity}
-                      onChange={(e) =>
-                        updateQuantity(
-                          item.productId,
-                          parseFloat(e.target.value) || 1,
-                        )
-                      }
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={styles.fieldLabel}>
-                      {t("buyingPriceLabel")}
-                    </label>
-                    <input
-                      type="number"
-                      style={styles.fieldInput}
-                      value={item.buyingPrice}
-                      onChange={(e) =>
-                        updateBuyingPrice(
-                          item.productId,
-                          parseFloat(e.target.value) || 0,
-                        )
-                      }
-                    />
-                  </div>
-                  <div style={{ minWidth: 90, textAlign: "right" }}>
-                    <label style={styles.fieldLabel}>{t("tableTotal")}</label>
-                    <div style={styles.itemTotal}>
-                      {formatTZS(item.quantity * item.buyingPrice)}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <RestockCartItemRow
+                key={item.productId}
+                item={item}
+                onUpdateQuantity={updateQuantity}
+                onUpdateBuyingPrice={updateBuyingPrice}
+                onRemove={removeFromRestockCart}
+              />
             ))}
           </div>
         )}
 
-        {items.length > 0 && suppliers.length > 0 && (
+        {items.length > 0 && (
           <div style={{ marginBottom: 4 }}>
             <label style={styles.fieldLabel}>
               {t("supplierOptionalLabel")}
             </label>
-            <select
-              style={styles.fieldInput}
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-            >
-              <option value="">{t("noSupplierOption")}</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <SupplierPicker
+              suppliers={suppliers}
+              selectedSupplierId={supplierId || null}
+              onSelect={(id) => setSupplierId(id || "")}
+              onSupplierAdded={(newSupplier) => {
+                setSuppliers((prev) => [...prev, newSupplier]);
+                setSupplierId(newSupplier.id);
+              }}
+            />
 
             {supplierId && (
               <div style={styles.paymentToggleRow}>
@@ -168,6 +141,25 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
                 >
                   {t("oweSupplierOption")}
                 </button>
+              </div>
+            )}
+
+            {supplierId && paymentStatus === "paid" && (
+              <div style={styles.methodRow}>
+                {PAYMENT_METHODS.map((m) => (
+                  <button
+                    key={m.value}
+                    style={{
+                      ...styles.methodChip,
+                      ...(paymentMethod === m.value
+                        ? styles.methodChipActive
+                        : {}),
+                    }}
+                    onClick={() => setPaymentMethod(m.value)}
+                  >
+                    {t(m.labelKey)}
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -245,33 +237,6 @@ const styles = {
     fontSize: 14,
   },
   itemList: { overflow: "auto", marginBottom: 16 },
-  item: { padding: "12px 0", borderBottom: "1px solid var(--border-muted)" },
-  itemTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  itemName: { fontSize: 14, fontWeight: 700 },
-  removeBtn: { background: "none", border: "none", fontSize: 13 },
-  itemRow: { display: "flex", gap: 10, alignItems: "flex-end" },
-  fieldLabel: {
-    display: "block",
-    fontSize: 10,
-    fontWeight: 700,
-    color: "var(--text-muted)",
-    marginBottom: 4,
-  },
-  fieldInput: {
-    width: "100%",
-    padding: "8px 10px",
-    border: "1.5px solid var(--border)",
-    borderRadius: 10,
-    fontSize: 13,
-    fontWeight: 600,
-    background: "var(--bg)",
-    marginBottom: 10,
-  },
   paymentToggleRow: { display: "flex", gap: 8, marginBottom: 10 },
   paymentToggle: {
     flex: 1,
@@ -295,7 +260,24 @@ const styles = {
     borderColor: "var(--danger)",
     color: "var(--danger)",
   },
-  itemTotal: { fontSize: 13, fontWeight: 700, padding: "8px 0" },
+  methodRow: { display: "flex", gap: 6, marginTop: 8 },
+  methodChip: {
+    flex: 1,
+    padding: "8px 0",
+    borderRadius: 10,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 600,
+    fontSize: 11,
+  },
+  methodChipActive: {
+    background: "var(--primary-light)",
+    borderColor: "var(--primary)",
+    color: "var(--primary-dark)",
+  },
   totalRow: {
     display: "flex",
     justifyContent: "space-between",

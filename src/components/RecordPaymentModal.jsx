@@ -6,9 +6,16 @@ const formatTZS = (amount) => {
   return "TZS " + Math.round(v).toLocaleString("en-US");
 };
 
+const PAYMENT_METHODS = [
+  { value: "cash", labelKey: "cashMethodOption" },
+  { value: "bank_transfer", labelKey: "bankTransferMethodOption" },
+  { value: "lipa_namba", labelKey: "lipaNambaMethodOption" },
+];
+
 const RecordPaymentModal = ({ visible, creditSale, onSave, onClose }) => {
   const { t } = useLanguage();
   const [amount, setAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -19,13 +26,14 @@ const RecordPaymentModal = ({ visible, creditSale, onSave, onClose }) => {
   const handleSave = async () => {
     const amt = parseFloat(amount) || 0;
     setSaving(true);
-    const result = await onSave(creditSale.id, amt);
+    const result = await onSave(creditSale.id, amt, paymentMethod);
     setSaving(false);
     if (!result.success) {
       setError(result.error);
       return;
     }
     setAmount("");
+    setPaymentMethod("cash");
     setError("");
   };
 
@@ -63,6 +71,22 @@ const RecordPaymentModal = ({ visible, creditSale, onSave, onClose }) => {
           placeholder="0"
           autoFocus
         />
+
+        <label style={styles.label}>{t("paymentMethodLabel")}</label>
+        <div style={styles.methodRow}>
+          {PAYMENT_METHODS.map((m) => (
+            <button
+              key={m.value}
+              style={{
+                ...styles.methodChip,
+                ...(paymentMethod === m.value ? styles.methodChipActive : {}),
+              }}
+              onClick={() => setPaymentMethod(m.value)}
+            >
+              {t(m.labelKey)}
+            </button>
+          ))}
+        </div>
 
         <div style={styles.actions}>
           <button style={styles.cancelBtn} onClick={onClose}>
@@ -130,6 +154,24 @@ const styles = {
     marginBottom: 18,
     background: "var(--bg)",
     color: "var(--text-primary)",
+  },
+  methodRow: { display: "flex", gap: 6, marginBottom: 18, marginTop: -8 },
+  methodChip: {
+    flex: 1,
+    padding: "9px 0",
+    borderRadius: 10,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 600,
+    fontSize: 12,
+  },
+  methodChipActive: {
+    background: "var(--primary-light)",
+    borderColor: "var(--primary)",
+    color: "var(--primary-dark)",
   },
   actions: { display: "flex", gap: 10 },
   cancelBtn: {

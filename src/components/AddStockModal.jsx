@@ -1,15 +1,27 @@
 import React, { useState, useEffect } from "react";
 import { dataService } from "../services/dataService";
 import { supplierService } from "../services/supplierService";
+import SupplierPicker from "./SupplierPicker.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
+
+// Cash, bank transfer, or Lipa Namba (Tanzanian mobile money merchant
+// payment) — exactly the three ways shop owners actually pay suppliers,
+// per direct customer feedback.
+const PAYMENT_METHODS = [
+  { value: "cash", labelKey: "cashMethodOption" },
+  { value: "bank_transfer", labelKey: "bankTransferMethodOption" },
+  { value: "lipa_namba", labelKey: "lipaNambaMethodOption" },
+];
 
 const AddStockModal = ({ visible, product, onSave, onClose }) => {
   const { t } = useLanguage();
   const [quantity, setQuantity] = useState("");
   const [buyingPrice, setBuyingPrice] = useState("");
   const [suppliers, setSuppliers] = useState([]);
-  const [supplierId, setSupplierId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [supplierId, setSupplierId] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState("paid");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -19,10 +31,12 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
   useEffect(() => {
     if (visible && product) {
       setQuantity("");
-      setBuyingPrice(String(product.buyingPrice || ""));
-      setSupplierId("");
+      setBuyingPrice(String(Math.round(product.buyingPrice || 0)));
+      setSupplierId(null);
       setPaymentStatus("paid");
+      setPaymentMethod("cash");
       setError("");
+      setSaving(false);
     }
   }, [visible, product]);
 
@@ -35,18 +49,25 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
       setError(t("enterValidQuantityError"));
       return;
     }
+    setSaving(true);
+    const selectedSupplier = suppliers.find((s) => s.id === supplierId);
     const result = await onSave({
       productId: product.id,
       quantity: qty,
       buyingPrice: price,
+      supplierId: supplierId || null,
+      supplierName: selectedSupplier?.name || "",
+      paymentMethod: paymentStatus === "paid" ? paymentMethod : "",
     });
     if (result && result.success === false) {
+      setSaving(false);
       setError(result.error);
       return;
     }
     if (supplierId && paymentStatus === "credit") {
       await supplierService.recordSupply(supplierId, qty * price);
     }
+    setSaving(false);
   };
 
   return (
@@ -78,46 +99,60 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
 
         <div style={styles.hint}>{t("addStockPriceHint")}</div>
 
-        {suppliers.length > 0 && (
-          <>
-            <label style={styles.label}>{t("supplierOptionalLabel")}</label>
-            <select
-              style={styles.input}
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-            >
-              <option value="">{t("noSupplierOption")}</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+        <label style={styles.label}>{t("supplierOptionalLabel")}</label>
+        <SupplierPicker
+          suppliers={suppliers}
+          selectedSupplierId={supplierId}
+          onSelect={setSupplierId}
+          onSupplierAdded={(newSupplier) => {
+            setSuppliers((prev) => [...prev, newSupplier]);
+            setSupplierId(newSupplier.id);
+          }}
+        />
 
-            {supplierId && (
-              <div style={styles.paymentToggleRow}>
-                <button
-                  style={{
-                    ...styles.paymentToggle,
-                    ...(paymentStatus === "paid"
-                      ? styles.paymentToggleActive
-                      : {}),
-                  }}
-                  onClick={() => setPaymentStatus("paid")}
-                >
-                  {t("paidNowOption")}
-                </button>
-                <button
-                  style={{
-                    ...styles.paymentToggle,
-                    ...(paymentStatus === "credit"
-                      ? styles.paymentToggleActiveCredit
-                      : {}),
-                  }}
-                  onClick={() => setPaymentStatus("credit")}
-                >
-                  {t("oweSupplierOption")}
-                </button>
+        {supplierId && (
+          <>
+            <div style={styles.paymentToggleRow}>
+              <button
+                style={{
+                  ...styles.paymentToggle,
+                  ...(paymentStatus === "paid"
+                    ? styles.paymentToggleActive
+                    : {}),
+                }}
+                onClick={() => setPaymentStatus("paid")}
+              >
+                {t("paidNowOption")}
+              </button>
+              <button
+                style={{
+                  ...styles.paymentToggle,
+                  ...(paymentStatus === "credit"
+                    ? styles.paymentToggleActiveCredit
+                    : {}),
+                }}
+                onClick={() => setPaymentStatus("credit")}
+              >
+                {t("oweSupplierOption")}
+              </button>
+            </div>
+
+            {paymentStatus === "paid" && (
+              <div style={styles.methodRow}>
+                {PAYMENT_METHODS.map((m) => (
+                  <button
+                    key={m.value}
+                    style={{
+                      ...styles.methodChip,
+                      ...(paymentMethod === m.value
+                        ? styles.methodChipActive
+                        : {}),
+                    }}
+                    onClick={() => setPaymentMethod(m.value)}
+                  >
+                    {t(m.labelKey)}
+                  </button>
+                ))}
               </div>
             )}
           </>
@@ -127,8 +162,8 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
           <button style={styles.cancelBtn} onClick={onClose}>
             {t("cancelButton")}
           </button>
-          <button style={styles.saveBtn} onClick={handleSave}>
-            {t("addStockButton")}
+          <button style={styles.saveBtn} disabled={saving} onClick={handleSave}>
+            {saving ? t("completing") : t("addStockButton")}
           </button>
         </div>
       </div>
@@ -167,7 +202,7 @@ const styles = {
     display: "block",
     fontSize: 12,
     fontWeight: 700,
-    marginBottom: 6,
+    marginBottom: 8,
     color: "var(--text-primary)",
   },
   input: {
@@ -214,6 +249,24 @@ const styles = {
     background: "var(--danger-light)",
     borderColor: "var(--danger)",
     color: "var(--danger)",
+  },
+  methodRow: { display: "flex", gap: 6, marginBottom: 14, marginTop: -6 },
+  methodChip: {
+    flex: 1,
+    padding: "8px 0",
+    borderRadius: 10,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 600,
+    fontSize: 11,
+  },
+  methodChipActive: {
+    background: "var(--primary-light)",
+    borderColor: "var(--primary)",
+    color: "var(--primary-dark)",
   },
   actions: { display: "flex", gap: 10 },
   cancelBtn: {

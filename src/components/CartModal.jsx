@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext.jsx";
 import { salesService } from "../services/salesService";
 import { creditService } from "../services/creditService";
+import { dataService } from "../services/dataService";
+import CartItemRow from "./CartItemRow.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const formatTZS = (amount) => {
@@ -16,8 +18,17 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash"); // 'cash' | 'credit'
+  const [paymentAccounts, setPaymentAccounts] = useState([]);
+  const [receivedVia, setReceivedVia] = useState("cash");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+
+  useEffect(() => {
+    if (visible)
+      dataService
+        .getSettings()
+        .then((s) => setPaymentAccounts(s.paymentAccounts || []));
+  }, [visible]);
 
   if (!visible) return null;
 
@@ -25,40 +36,64 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
     setError("");
     setCompleting(true);
 
-    const result =
-      paymentMode === "credit"
-        ? await creditService.completeCreditSale({
-            cartItems: items,
-            customerName,
-            customerPhone,
-          })
-        : await salesService.completeCartSale(items);
+    try {
+      const selectedAccount = paymentAccounts.find((a) => a.id === receivedVia);
+      const paymentMethod =
+        paymentMode === "cash"
+          ? selectedAccount
+            ? selectedAccount.type
+            : "cash"
+          : "";
+      const accountId =
+        paymentMode === "cash" ? selectedAccount?.id || null : null;
+      const accountLabel =
+        paymentMode === "cash" ? selectedAccount?.label || "" : "";
 
-    setCompleting(false);
+      const result =
+        paymentMode === "credit"
+          ? await creditService.completeCreditSale({
+              cartItems: items,
+              customerName,
+              customerPhone,
+            })
+          : await salesService.completeCartSale(items, {
+              paymentMethod,
+              accountId,
+              accountLabel,
+            });
 
-    if (!result.success) {
-      setError(result.error);
-      return;
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      const saleData = {
+        items: items.map((item) => ({
+          productName: item.productName,
+          quantity: item.quantity,
+          sellingPrice: item.sellingPrice,
+        })),
+        total: totalAmount,
+        isCredit: paymentMode === "credit",
+        paymentMethod,
+        accountLabel,
+        customerName,
+        customerPhone,
+        date: new Date().toISOString(),
+      };
+
+      clearCart();
+      setCustomerName("");
+      setCustomerPhone("");
+      setPaymentMode("cash");
+      setReceivedVia("cash");
+      onCompleted(saleData);
+    } catch (err) {
+      console.error("Cart completion error:", err);
+      setError(t("unexpectedErrorTryAgain"));
+    } finally {
+      setCompleting(false);
     }
-
-    const saleData = {
-      items: items.map((item) => ({
-        productName: item.productName,
-        quantity: item.quantity,
-        sellingPrice: item.sellingPrice,
-      })),
-      total: totalAmount,
-      isCredit: paymentMode === "credit",
-      customerName,
-      customerPhone,
-      date: new Date().toISOString(),
-    };
-
-    clearCart();
-    setCustomerName("");
-    setCustomerPhone("");
-    setPaymentMode("cash");
-    onCompleted(saleData);
   };
 
   return (
@@ -78,47 +113,12 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
         ) : (
           <div style={styles.itemList}>
             {items.map((item) => (
-              <div key={item.productId} style={styles.item}>
-                <div style={styles.itemTopRow}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={styles.itemName}>{item.productName}</div>
-                    <div style={styles.itemPrice}>
-                      {formatTZS(item.sellingPrice)} / {item.unit}
-                    </div>
-                  </div>
-                  <div style={styles.itemTotal}>
-                    {formatTZS(item.sellingPrice * item.quantity)}
-                  </div>
-                </div>
-                <div style={styles.itemBottomRow}>
-                  <div style={styles.qtyControls}>
-                    <span style={styles.qtyLabel}>{t("tableQuantity")}</span>
-                    <button
-                      style={styles.qtyBtn}
-                      onClick={() =>
-                        updateQuantity(item.productId, item.quantity - 1)
-                      }
-                    >
-                      −
-                    </button>
-                    <span style={styles.qtyValue}>{item.quantity}</span>
-                    <button
-                      style={styles.qtyBtn}
-                      onClick={() =>
-                        updateQuantity(item.productId, item.quantity + 1)
-                      }
-                    >
-                      +
-                    </button>
-                  </div>
-                  <button
-                    style={styles.removeBtn}
-                    onClick={() => removeFromCart(item.productId)}
-                  >
-                    {t("deleteButton")}
-                  </button>
-                </div>
-              </div>
+              <CartItemRow
+                key={item.productId}
+                item={item}
+                onUpdateQuantity={updateQuantity}
+                onRemove={removeFromCart}
+              />
             ))}
           </div>
         )}
@@ -147,6 +147,34 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
                 {t("creditSaleLabel")}
               </button>
             </div>
+
+            {paymentMode === "cash" && paymentAccounts.length > 0 && (
+              <div style={styles.accountChipRow}>
+                <button
+                  style={{
+                    ...styles.accountChip,
+                    ...(receivedVia === "cash" ? styles.accountChipActive : {}),
+                  }}
+                  onClick={() => setReceivedVia("cash")}
+                >
+                  {t("cashMethodOption")}
+                </button>
+                {paymentAccounts.map((acc) => (
+                  <button
+                    key={acc.id}
+                    style={{
+                      ...styles.accountChip,
+                      ...(receivedVia === acc.id
+                        ? styles.accountChipActive
+                        : {}),
+                    }}
+                    onClick={() => setReceivedVia(acc.id)}
+                  >
+                    {acc.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {paymentMode === "credit" && (
               <div style={styles.customerFields}>
@@ -248,64 +276,6 @@ const styles = {
     fontSize: 14,
   },
   itemList: { overflow: "auto", marginBottom: 16 },
-  item: {
-    padding: "12px 0",
-    borderBottom: "1px solid var(--border-muted)",
-  },
-  itemTopRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 10,
-  },
-  itemName: { fontSize: 14, fontWeight: 700 },
-  itemPrice: { fontSize: 12, color: "var(--text-muted)", marginTop: 2 },
-  itemBottomRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  qtyControls: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    background: "var(--bg)",
-    borderRadius: 12,
-    padding: "6px 10px",
-  },
-  qtyLabel: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: "var(--text-muted)",
-    marginRight: 2,
-  },
-  qtyBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    borderWidth: "1.5px",
-    borderStyle: "solid",
-    borderColor: "var(--border)",
-    background: "var(--surface)",
-    fontSize: 16,
-    fontWeight: 700,
-    color: "var(--text-primary)",
-  },
-  qtyValue: {
-    fontSize: 15,
-    fontWeight: 800,
-    minWidth: 24,
-    textAlign: "center",
-  },
-  itemTotal: { fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" },
-  removeBtn: {
-    background: "none",
-    border: "none",
-    fontSize: 12,
-    fontWeight: 700,
-    color: "var(--danger)",
-    padding: "6px 10px",
-  },
   totalRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -336,6 +306,28 @@ const styles = {
     background: "var(--accent-light)",
     borderColor: "var(--accent)",
     color: "#8A5A1E",
+  },
+  accountChipRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 14,
+  },
+  accountChip: {
+    padding: "8px 14px",
+    borderRadius: 999,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 600,
+    fontSize: 12,
+  },
+  accountChipActive: {
+    background: "var(--primary-light)",
+    borderColor: "var(--primary)",
+    color: "var(--primary-dark)",
   },
   customerFields: {
     display: "flex",

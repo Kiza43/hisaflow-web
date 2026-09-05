@@ -42,8 +42,12 @@ const SuppliersScreen = () => {
     setPendingDeleteId(null);
   };
 
-  const handlePayment = async (supplierId, amount) => {
-    const result = await supplierService.recordPayment(supplierId, amount);
+  const handlePayment = async (supplierId, amount, paymentMethod) => {
+    const result = await supplierService.recordPayment(
+      supplierId,
+      amount,
+      paymentMethod,
+    );
     if (result.success) {
       await loadSuppliers();
       setPayingSupplier(null);

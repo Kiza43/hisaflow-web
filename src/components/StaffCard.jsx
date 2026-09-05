@@ -49,13 +49,13 @@ const styles = {
   card: {
     background: "var(--surface)",
     borderRadius: 18,
-    padding: 18,
+    padding: 20,
     border: "1px solid var(--border-muted)",
   },
-  header: { display: "flex", alignItems: "center", gap: 12, marginBottom: 14 },
+  header: { display: "flex", alignItems: "center", gap: 12, marginBottom: 16 },
   avatar: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: 999,
     background: "var(--primary)",
     color: "white",
@@ -66,16 +66,16 @@ const styles = {
     fontWeight: 800,
     flexShrink: 0,
   },
-  name: { fontSize: 14, fontWeight: 700 },
+  name: { fontSize: 15, fontWeight: 700 },
   permBadge: {
     display: "inline-block",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 700,
     color: "var(--text-muted)",
     background: "var(--bg)",
     borderRadius: 999,
-    padding: "3px 9px",
-    marginTop: 4,
+    padding: "4px 10px",
+    marginTop: 5,
   },
   permBadgeFull: {
     background: "var(--primary-light)",
@@ -89,7 +89,7 @@ const styles = {
     background: "var(--surface)",
     color: "var(--text-secondary)",
     fontWeight: 700,
-    fontSize: 12,
+    fontSize: 12.5,
   },
   deleteBtn: {
     flex: 1,
@@ -99,7 +99,7 @@ const styles = {
     background: "var(--danger-light)",
     color: "var(--danger)",
     fontWeight: 700,
-    fontSize: 12,
+    fontSize: 12.5,
   },
 };
 

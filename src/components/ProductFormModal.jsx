@@ -1,10 +1,31 @@
 import React, { useState, useEffect, useRef } from "react";
 import { dataService } from "../services/dataService";
+import SupplierPicker from "./SupplierPicker.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
+
+// Same starter set the phone app ships with — covers most small-shop
+// inventory without typing anything, while "Other" still allows a fully
+// custom unit for whatever doesn't fit.
+const PRESET_UNITS = [
+  { value: "pc", label: "Pc" },
+  { value: "kg", label: "Kilo (kg)" },
+  { value: "lita", label: "Lita (L)" },
+  { value: "mita", label: "Mita (m)" },
+  { value: "kifurushi", label: "Kifurushi" },
+  { value: "dazani", label: "Dazani" },
+  { value: "sanduku", label: "Sanduku" },
+];
+
+const PAYMENT_METHODS = [
+  { value: "cash", labelKey: "cashMethodOption" },
+  { value: "bank_transfer", labelKey: "bankTransferMethodOption" },
+  { value: "lipa_namba", labelKey: "lipaNambaMethodOption" },
+];
 
 const emptyForm = {
   name: "",
   category: "",
+  brand: "",
   unit: "pc",
   stock: "",
   buyingPrice: "",
@@ -13,13 +34,16 @@ const emptyForm = {
   expiryDate: "",
   supplierId: "",
   supplierPaymentStatus: "paid",
+  supplierPaymentMethod: "cash",
 };
 
 const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
   const { t } = useLanguage();
   const [form, setForm] = useState(emptyForm);
+  const [showCustomUnit, setShowCustomUnit] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -31,9 +55,10 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
       setForm({
         name: editingProduct.name || "",
         category: editingProduct.category || "",
+        brand: editingProduct.brand || "",
         unit: editingProduct.unit || "pc",
         stock: String(editingProduct.stock ?? ""),
-        buyingPrice: String(editingProduct.buyingPrice ?? ""),
+        buyingPrice: String(Math.round(editingProduct.buyingPrice ?? 0)),
         sellingPrice: String(editingProduct.sellingPrice ?? ""),
         imageUri: editingProduct.imageUri || null,
         expiryDate: editingProduct.expiryDate
@@ -41,11 +66,17 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
           : "",
         supplierId: "",
         supplierPaymentStatus: "paid",
+        supplierPaymentMethod: "cash",
       });
+      setShowCustomUnit(
+        !PRESET_UNITS.some((u) => u.value === (editingProduct.unit || "pc")),
+      );
     } else {
       setForm(emptyForm);
+      setShowCustomUnit(false);
     }
     setError("");
+    setSaving(false);
   }, [editingProduct, visible]);
 
   if (!visible) return null;
@@ -59,7 +90,8 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
     reader.readAsDataURL(file);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (saving) return; // already in flight — a second click here shouldn't create a duplicate product/batch
     if (!form.name.trim()) {
       setError(t("enterProductNameError"));
       return;
@@ -72,13 +104,15 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
     }
     const stock = parseInt(form.stock, 10) || 0;
 
-    onSave({
+    setSaving(true);
+    await onSave({
       product: {
         id: editingProduct
           ? editingProduct.id
           : `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         name: form.name.trim(),
         category: form.category.trim(),
+        brand: form.brand.trim(),
         unit: form.unit,
         stock,
         buyingPrice,
@@ -93,8 +127,14 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
         !editingProduct && form.supplierId && stock > 0
           ? {
               supplierId: form.supplierId,
+              supplierName:
+                suppliers.find((s) => s.id === form.supplierId)?.name || "",
               amount: stock * buyingPrice,
               isCredit: form.supplierPaymentStatus === "credit",
+              paymentMethod:
+                form.supplierPaymentStatus === "paid"
+                  ? form.supplierPaymentMethod
+                  : "",
             }
           : null,
     });
@@ -152,13 +192,26 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
           autoFocus
         />
 
-        <label style={styles.label}>{t("categoryLabel")}</label>
-        <input
-          style={styles.input}
-          value={form.category}
-          onChange={(e) => setForm({ ...form, category: e.target.value })}
-          placeholder={t("categoryPlaceholder")}
-        />
+        <div style={styles.row}>
+          <div style={{ flex: 1 }}>
+            <label style={styles.label}>{t("categoryLabel")}</label>
+            <input
+              style={styles.input}
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+              placeholder={t("categoryPlaceholder")}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={styles.label}>{t("brandLabel")}</label>
+            <input
+              style={styles.input}
+              value={form.brand}
+              onChange={(e) => setForm({ ...form, brand: e.target.value })}
+              placeholder={t("brandPlaceholder")}
+            />
+          </div>
+        </div>
 
         <div style={styles.row}>
           <div style={{ flex: 1 }}>
@@ -180,12 +233,43 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
           </div>
           <div style={{ flex: 1 }}>
             <label style={styles.label}>{t("unitLabel")}</label>
-            <input
-              style={styles.input}
-              value={form.unit}
-              onChange={(e) => setForm({ ...form, unit: e.target.value })}
-              placeholder="pc"
-            />
+            <div style={styles.unitChipRow}>
+              {PRESET_UNITS.map((u) => (
+                <button
+                  key={u.value}
+                  type="button"
+                  style={{
+                    ...styles.unitChip,
+                    ...(form.unit === u.value ? styles.unitChipActive : {}),
+                  }}
+                  onClick={() => {
+                    setForm({ ...form, unit: u.value });
+                    setShowCustomUnit(false);
+                  }}
+                >
+                  {u.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                style={{
+                  ...styles.unitChip,
+                  ...(showCustomUnit ? styles.unitChipActive : {}),
+                }}
+                onClick={() => setShowCustomUnit(true)}
+              >
+                {t("otherOption")}
+              </button>
+            </div>
+            {showCustomUnit && (
+              <input
+                style={{ ...styles.input, marginTop: 8 }}
+                value={form.unit}
+                onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                placeholder={t("customUnitPlaceholder")}
+                autoFocus
+              />
+            )}
           </div>
         </div>
 
@@ -224,21 +308,18 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
           onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
         />
 
-        {!editingProduct && suppliers.length > 0 && (
+        {!editingProduct && (
           <>
             <label style={styles.label}>{t("supplierOptionalLabel")}</label>
-            <select
-              style={styles.input}
-              value={form.supplierId}
-              onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
-            >
-              <option value="">{t("noSupplierOption")}</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <SupplierPicker
+              suppliers={suppliers}
+              selectedSupplierId={form.supplierId || null}
+              onSelect={(id) => setForm({ ...form, supplierId: id || "" })}
+              onSupplierAdded={(newSupplier) => {
+                setSuppliers((prev) => [...prev, newSupplier]);
+                setForm({ ...form, supplierId: newSupplier.id });
+              }}
+            />
 
             {form.supplierId && (
               <div style={styles.paymentToggleRow}>
@@ -270,6 +351,27 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
                 </button>
               </div>
             )}
+
+            {form.supplierId && form.supplierPaymentStatus === "paid" && (
+              <div style={styles.methodRow}>
+                {PAYMENT_METHODS.map((m) => (
+                  <button
+                    key={m.value}
+                    style={{
+                      ...styles.methodChip,
+                      ...(form.supplierPaymentMethod === m.value
+                        ? styles.methodChipActive
+                        : {}),
+                    }}
+                    onClick={() =>
+                      setForm({ ...form, supplierPaymentMethod: m.value })
+                    }
+                  >
+                    {t(m.labelKey)}
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         )}
 
@@ -277,8 +379,8 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
           <button style={styles.cancelBtn} onClick={onClose}>
             {t("cancelButton")}
           </button>
-          <button style={styles.saveBtn} onClick={handleSave}>
-            {t("saveButton")}
+          <button style={styles.saveBtn} disabled={saving} onClick={handleSave}>
+            {saving ? t("completing") : t("saveButton")}
           </button>
         </div>
       </div>
@@ -287,6 +389,23 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
 };
 
 const styles = {
+  unitChipRow: { display: "flex", flexWrap: "wrap", gap: 5 },
+  unitChip: {
+    padding: "7px 10px",
+    borderRadius: 999,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 600,
+    fontSize: 11,
+  },
+  unitChipActive: {
+    background: "var(--primary)",
+    borderColor: "var(--primary)",
+    color: "white",
+  },
   overlay: {
     position: "fixed",
     inset: 0,
@@ -411,6 +530,24 @@ const styles = {
     background: "var(--danger-light)",
     borderColor: "var(--danger)",
     color: "var(--danger)",
+  },
+  methodRow: { display: "flex", gap: 6, marginTop: 8 },
+  methodChip: {
+    flex: 1,
+    padding: "8px 0",
+    borderRadius: 10,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 600,
+    fontSize: 11,
+  },
+  methodChipActive: {
+    background: "var(--primary-light)",
+    borderColor: "var(--primary)",
+    color: "var(--primary-dark)",
   },
   actions: { display: "flex", gap: 10, marginTop: 6 },
   cancelBtn: {

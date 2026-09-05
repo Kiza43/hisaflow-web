@@ -26,6 +26,9 @@ export const dataService = {
   getActivityLog: () => window.hisaflow.getActivityLog(),
   saveActivityLog: (log) => window.hisaflow.saveActivityLog(log),
 
+  getCrashLog: () => window.hisaflow.getCrashLog(),
+  saveCrashLog: (log) => window.hisaflow.saveCrashLog(log),
+
   getSettings: () => window.hisaflow.getSettings(),
   saveSettings: (settings) => window.hisaflow.saveSettings(settings),
 };

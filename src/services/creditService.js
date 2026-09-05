@@ -25,6 +25,18 @@ export const creditService = {
     const consumptions = new Map();
 
     for (const item of cartItems) {
+      if (!item.quantity || item.quantity <= 0) {
+        return {
+          success: false,
+          error: `${item.productName}: weka kiasi sahihi`,
+        };
+      }
+      if (!item.sellingPrice || item.sellingPrice <= 0) {
+        return {
+          success: false,
+          error: `${item.productName}: weka bei sahihi ya kuuza`,
+        };
+      }
       const product = productMap.get(item.productId);
       if (!product) {
         return {
@@ -81,7 +93,7 @@ export const creditService = {
     return { success: true, creditSale };
   },
 
-  async recordPayment(creditSaleId, amount) {
+  async recordPayment(creditSaleId, amount, paymentMethod) {
     if (amount <= 0) {
       return { success: false, error: "Weka kiasi sahihi" };
     }
@@ -112,7 +124,11 @@ export const creditService = {
             status: newStatus,
             payments: [
               ...cs.payments,
-              { amount, date: new Date().toISOString() },
+              {
+                amount,
+                paymentMethod: paymentMethod || "",
+                date: new Date().toISOString(),
+              },
             ],
           }
         : cs,

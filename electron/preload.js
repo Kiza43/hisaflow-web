@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld("hisaflow", {
   getActivityLog: () => ipcRenderer.invoke("data:getActivityLog"),
   saveActivityLog: (log) => ipcRenderer.invoke("data:saveActivityLog", log),
 
+  getCrashLog: () => ipcRenderer.invoke("data:getCrashLog"),
+  saveCrashLog: (log) => ipcRenderer.invoke("data:saveCrashLog", log),
+
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 
   copyImageToClipboard: (dataUrl) =>

@@ -9,7 +9,10 @@ export const searchService = {
     if (!query || !query.trim()) return products;
     const q = norm(query);
     return products.filter(
-      (p) => norm(p.name).includes(q) || norm(p.category).includes(q),
+      (p) =>
+        norm(p.name).includes(q) ||
+        norm(p.category).includes(q) ||
+        norm(p.brand).includes(q),
     );
   },
 };

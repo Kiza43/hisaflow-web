@@ -34,8 +34,12 @@ const CreditScreen = () => {
     dataService.getSettings().then(setSettings);
   }, []);
 
-  const handleRecordPayment = async (creditSaleId, amount) => {
-    const result = await creditService.recordPayment(creditSaleId, amount);
+  const handleRecordPayment = async (creditSaleId, amount, paymentMethod) => {
+    const result = await creditService.recordPayment(
+      creditSaleId,
+      amount,
+      paymentMethod,
+    );
     if (result.success) {
       const target = payingCreditSale;
       await loadCreditSales();
@@ -47,6 +51,7 @@ const CreditScreen = () => {
           customerPhone: target.customerPhone,
           items: target.items,
           paymentAmount: amount,
+          paymentMethod,
           totalAmount: target.totalAmount,
           amountPaidAfter,
           remainingAmount: target.totalAmount - amountPaidAfter,

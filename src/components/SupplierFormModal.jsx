@@ -6,11 +6,14 @@ const SupplierFormModal = ({ visible, onSave, onClose }) => {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   if (!visible) return null;
 
   const handleSave = async () => {
+    setSaving(true);
     const result = await onSave({ name, phone });
+    setSaving(false);
     if (!result.success) {
       setError(result.error);
       return;
@@ -24,6 +27,7 @@ const SupplierFormModal = ({ visible, onSave, onClose }) => {
     setName("");
     setPhone("");
     setError("");
+    setSaving(false);
     onClose();
   };
 
@@ -54,8 +58,8 @@ const SupplierFormModal = ({ visible, onSave, onClose }) => {
           <button style={styles.cancelBtn} onClick={handleClose}>
             {t("cancelButton")}
           </button>
-          <button style={styles.saveBtn} onClick={handleSave}>
-            {t("saveButton")}
+          <button style={styles.saveBtn} disabled={saving} onClick={handleSave}>
+            {saving ? t("completing") : t("saveButton")}
           </button>
         </div>
       </div>

@@ -136,6 +136,8 @@ const styles = {
     color: "var(--text-secondary)",
     fontSize: 13,
     fontWeight: 600,
+    transition:
+      "background 0.15s ease, border-color 0.15s ease, color 0.15s ease",
   },
   navItemActive: {
     background: "var(--bg)",

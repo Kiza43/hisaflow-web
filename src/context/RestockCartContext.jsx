@@ -22,7 +22,7 @@ export const RestockCartProvider = ({ children }) => {
           productName: product.name,
           unit: product.unit,
           quantity: 1,
-          buyingPrice: product.buyingPrice || 0,
+          buyingPrice: Math.round(product.buyingPrice || 0),
         },
       ];
     });

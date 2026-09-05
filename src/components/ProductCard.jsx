@@ -35,6 +35,7 @@ const ProductCard = ({
   onAddStock,
   onAddToRestockCart,
   onNotifyPastBuyers,
+  onViewBatches,
   lowStockThreshold = 10,
 }) => {
   const { t } = useLanguage();
@@ -57,12 +58,16 @@ const ProductCard = ({
           {product.imageUri ? (
             <img src={product.imageUri} alt="" style={styles.thumb} />
           ) : (
-            <span style={{ ...styles.statusDot, background: statusColor }} />
+            <div style={styles.thumbFallback}>
+              <span style={{ ...styles.statusDot, background: statusColor }} />
+            </div>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={styles.name}>{product.name}</div>
-            {product.category && (
-              <div style={styles.category}>{product.category}</div>
+            {(product.category || product.brand) && (
+              <div style={styles.category}>
+                {[product.brand, product.category].filter(Boolean).join(" · ")}
+              </div>
             )}
           </div>
         </div>
@@ -113,36 +118,45 @@ const ProductCard = ({
             {formatTZS(Math.abs(profitPerUnit))}
           </strong>
         </span>
-        <span style={{ ...styles.stockText, color: statusColor }}>
+        <span
+          style={{
+            ...styles.stockText,
+            color: statusColor,
+            ...(onViewBatches ? styles.stockTextClickable : {}),
+          }}
+          onClick={onViewBatches ? () => onViewBatches(product) : undefined}
+          title={onViewBatches ? t("viewBatchesTooltip") : undefined}
+        >
           {stock} {product.unit}
         </span>
       </div>
 
-      <div style={styles.actionRow}>
-        <button style={styles.iconBtn} onClick={() => onAddStock(product)}>
+      <div style={styles.secondaryRow}>
+        <button style={styles.secondaryBtn} onClick={() => onAddStock(product)}>
           {t("addStockButton")}
         </button>
         <button
-          style={styles.iconBtn}
+          style={styles.secondaryBtn}
           onClick={() => onAddToRestockCart(product)}
         >
           {t("restockShortLabel")}
         </button>
         <button
-          style={{ ...styles.iconBtn, opacity: isOut ? 0.4 : 1 }}
+          style={{ ...styles.secondaryBtn, opacity: isOut ? 0.4 : 1 }}
           disabled={isOut}
           onClick={() => onAddToCart(product)}
         >
           {t("cartShortLabel")}
         </button>
-        <button
-          style={{ ...styles.sellBtn, opacity: isOut ? 0.4 : 1 }}
-          disabled={isOut}
-          onClick={() => onQuickSell(product)}
-        >
-          {t("sellButton")}
-        </button>
       </div>
+
+      <button
+        style={{ ...styles.sellBtn, opacity: isOut ? 0.4 : 1 }}
+        disabled={isOut}
+        onClick={() => onQuickSell(product)}
+      >
+        {t("sellButton")}
+      </button>
     </div>
   );
 };
@@ -150,84 +164,99 @@ const ProductCard = ({
 const styles = {
   card: {
     background: "var(--surface)",
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 18,
+    padding: 20,
     border: "1px solid var(--border-muted)",
   },
   headerRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 10,
+    marginBottom: 14,
   },
   identity: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: 14,
     flex: 1,
     minWidth: 0,
-    paddingRight: 8,
+    paddingRight: 10,
   },
-  statusDot: { width: 6, height: 6, borderRadius: 999, flexShrink: 0 },
   thumb: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    width: 52,
+    height: 52,
+    borderRadius: 12,
     objectFit: "cover",
     flexShrink: 0,
   },
+  thumbFallback: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    background: "var(--bg)",
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusDot: { width: 9, height: 9, borderRadius: 999 },
   name: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 700,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
-  category: { fontSize: 11, color: "var(--text-muted)", marginTop: 1 },
-  headerActions: { display: "flex", gap: 10 },
+  category: { fontSize: 12, color: "var(--text-muted)", marginTop: 3 },
+  headerActions: { display: "flex", gap: 14, flexShrink: 0, paddingTop: 2 },
   textLink: {
     background: "none",
     border: "none",
-    fontSize: 11,
-    fontWeight: 700,
+    fontSize: 12,
+    fontWeight: 600,
     color: "var(--text-secondary)",
   },
   expiryBadge: {
     display: "inline-block",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 700,
-    padding: "3px 9px",
+    padding: "4px 11px",
     borderRadius: 999,
-    marginBottom: 10,
+    marginBottom: 14,
   },
   infoRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 18,
   },
-  profitLabel: { fontSize: 12, color: "var(--text-muted)" },
-  stockText: { fontSize: 12, fontWeight: 700 },
-  actionRow: { display: "flex", gap: 6 },
-  iconBtn: {
+  profitLabel: { fontSize: 13, color: "var(--text-muted)" },
+  stockText: { fontSize: 13, fontWeight: 700 },
+  stockTextClickable: {
+    cursor: "pointer",
+    textDecoration: "underline",
+    textDecorationStyle: "dotted",
+  },
+  secondaryRow: { display: "flex", gap: 8, marginBottom: 10 },
+  secondaryBtn: {
     flex: 1,
     borderRadius: 10,
     border: "1px solid var(--border-muted)",
     background: "var(--bg)",
     color: "var(--text-secondary)",
-    fontWeight: 700,
-    fontSize: 11,
-    padding: "8px 0",
+    fontWeight: 600,
+    fontSize: 12.5,
+    padding: "10px 0",
   },
   sellBtn: {
-    flex: 1,
+    width: "100%",
     borderRadius: 10,
     border: "none",
-    padding: "8px 0",
+    padding: "12px 0",
     background: "var(--primary)",
     color: "white",
     fontWeight: 700,
-    fontSize: 13,
+    fontSize: 14,
   },
 };
 

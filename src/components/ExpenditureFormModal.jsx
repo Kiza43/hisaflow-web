@@ -7,10 +7,11 @@ const ExpenditureFormModal = ({ visible, onSave, onClose }) => {
   const [amount, setAmount] = useState("");
   const [type, setType] = useState("operational");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   if (!visible) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!description.trim()) {
       setError(t("enterExpenditureDescriptionError"));
       return;
@@ -20,7 +21,8 @@ const ExpenditureFormModal = ({ visible, onSave, onClose }) => {
       setError(t("enterValidAmountError"));
       return;
     }
-    onSave({
+    setSaving(true);
+    await onSave({
       id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       description: description.trim(),
       amount: amt,
@@ -31,6 +33,7 @@ const ExpenditureFormModal = ({ visible, onSave, onClose }) => {
     setAmount("");
     setType("operational");
     setError("");
+    setSaving(false);
   };
 
   const handleClose = () => {
@@ -38,6 +41,7 @@ const ExpenditureFormModal = ({ visible, onSave, onClose }) => {
     setAmount("");
     setType("operational");
     setError("");
+    setSaving(false);
     onClose();
   };
 
@@ -93,8 +97,8 @@ const ExpenditureFormModal = ({ visible, onSave, onClose }) => {
           <button style={styles.cancelBtn} onClick={handleClose}>
             {t("cancelButton")}
           </button>
-          <button style={styles.saveBtn} onClick={handleSave}>
-            {t("saveButton")}
+          <button style={styles.saveBtn} disabled={saving} onClick={handleSave}>
+            {saving ? t("completing") : t("saveButton")}
           </button>
         </div>
       </div>

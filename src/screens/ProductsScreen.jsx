@@ -12,6 +12,7 @@ import ReceiptModal from "../components/ReceiptModal.jsx";
 import ConfirmModal from "../components/ConfirmModal.jsx";
 import PosterModal from "../components/PosterModal.jsx";
 import NotifyPastBuyersModal from "../components/NotifyPastBuyersModal.jsx";
+import BatchListModal from "../components/BatchListModal.jsx";
 import { useCart } from "../context/CartContext.jsx";
 import { useRestockCart } from "../context/RestockCartContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
@@ -19,6 +20,7 @@ import { restockService } from "../services/restockService";
 import { supplierService } from "../services/supplierService";
 import { batchService } from "../services/batchService";
 import { activityLogService } from "../services/activityLogService";
+import { sampleDataService } from "../services/sampleDataService";
 import { filterService } from "../services/filterService";
 import { searchService } from "../services/searchService";
 
@@ -30,6 +32,7 @@ const ProductsScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showBestSellers, setShowBestSellers] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [brandFilter, setBrandFilter] = useState("all");
   const [stockStatusFilter, setStockStatusFilter] = useState("all"); // all | low-stock | out-of-stock
   const [sortBy, setSortBy] = useState("name"); // name | price | stock
   const [sortOrder, setSortOrder] = useState("asc");
@@ -44,6 +47,8 @@ const ProductsScreen = () => {
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [showPoster, setShowPoster] = useState(false);
   const [notifyBuyersProduct, setNotifyBuyersProduct] = useState(null);
+  const [viewingBatchesProduct, setViewingBatchesProduct] = useState(null);
+  const [loadingSample, setLoadingSample] = useState(false);
   const { addToCart } = useCart();
   const { addToRestockCart } = useRestockCart();
 
@@ -75,6 +80,14 @@ const ProductsScreen = () => {
             { ...product, stock: 0, buyingPrice: 0, stockBatches: [] },
             product.stock,
             product.buyingPrice,
+            undefined,
+            supplierLink
+              ? {
+                  supplierId: supplierLink.supplierId,
+                  supplierName: supplierLink.supplierName,
+                  paymentMethod: supplierLink.paymentMethod,
+                }
+              : {},
           )
         : product;
     const updated = exists
@@ -103,15 +116,29 @@ const ProductsScreen = () => {
     setPendingDeleteId(null);
   };
 
+  const handleAddSampleProducts = async () => {
+    setLoadingSample(true);
+    await sampleDataService.addSampleProducts();
+    await loadProducts();
+    await activityLogService.logActivity("added sample products", "");
+    setLoadingSample(false);
+  };
+
   const handleAddStockComplete = async ({
     productId,
     quantity,
     buyingPrice,
+    supplierId,
+    supplierName,
+    paymentMethod,
   }) => {
     const result = await restockService.addStock({
       productId,
       quantity,
       buyingPrice,
+      supplierId,
+      supplierName,
+      paymentMethod,
     });
     if (result.success) {
       await loadProducts();
@@ -123,6 +150,7 @@ const ProductsScreen = () => {
   if (loading) return null;
 
   const categories = filterService.getCategories(products);
+  const brands = filterService.getBrands(products);
 
   const quantityByProduct = {};
   sales.forEach((s) => {
@@ -136,6 +164,7 @@ const ProductsScreen = () => {
   let displayedProducts = searchService.searchProducts(products, searchQuery);
   displayedProducts = filterService.filterProducts(displayedProducts, {
     category: categoryFilter,
+    brand: brandFilter,
     stockStatus: stockStatusFilter,
   });
 
@@ -206,6 +235,21 @@ const ProductsScreen = () => {
           </select>
         )}
 
+        {brands.length > 0 && (
+          <select
+            style={styles.filterSelect}
+            value={brandFilter}
+            onChange={(e) => setBrandFilter(e.target.value)}
+          >
+            <option value="all">{t("allBrandsOption")}</option>
+            {brands.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        )}
+
         <select
           style={styles.filterSelect}
           value={stockStatusFilter}
@@ -245,9 +289,22 @@ const ProductsScreen = () => {
           <div style={{ fontWeight: 700, marginBottom: 4 }}>
             {t("noProductsYet")}
           </div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+          <div
+            style={{
+              fontSize: 13,
+              color: "var(--text-muted)",
+              marginBottom: 16,
+            }}
+          >
             {t("tapAddProductHint")}
           </div>
+          <button
+            style={styles.sampleDataBtn}
+            disabled={loadingSample}
+            onClick={handleAddSampleProducts}
+          >
+            {loadingSample ? t("completing") : t("addSampleProductsButton")}
+          </button>
         </div>
       ) : displayedProducts.length === 0 ? (
         <div style={styles.emptyState}>
@@ -273,6 +330,7 @@ const ProductsScreen = () => {
               onAddStock={(prod) => setAddStockProduct(prod)}
               onAddToRestockCart={addToRestockCart}
               onNotifyPastBuyers={setNotifyBuyersProduct}
+              onViewBatches={setViewingBatchesProduct}
             />
           ))}
         </div>
@@ -300,8 +358,6 @@ const ProductsScreen = () => {
         onClose={() => setQuickSellProductId(null)}
       />
 
-      <CartBar onOpenCart={() => setShowCart(true)} />
-
       <CartModal
         visible={showCart}
         onClose={() => setShowCart(false)}
@@ -319,8 +375,6 @@ const ProductsScreen = () => {
         onClose={() => setAddStockProduct(null)}
       />
 
-      <RestockCartBar onOpenCart={() => setShowRestockCart(true)} />
-
       <RestockCartModal
         visible={showRestockCart}
         onClose={() => setShowRestockCart(false)}
@@ -329,6 +383,11 @@ const ProductsScreen = () => {
           loadProducts();
         }}
       />
+
+      <div style={styles.floatingStack}>
+        <CartBar onOpenCart={() => setShowCart(true)} />
+        <RestockCartBar onOpenCart={() => setShowRestockCart(true)} />
+      </div>
 
       <ReceiptModal
         visible={!!receiptSale}
@@ -351,11 +410,28 @@ const ProductsScreen = () => {
         product={notifyBuyersProduct}
         onClose={() => setNotifyBuyersProduct(null)}
       />
+
+      <BatchListModal
+        visible={!!viewingBatchesProduct}
+        product={viewingBatchesProduct}
+        onClose={() => setViewingBatchesProduct(null)}
+      />
     </div>
   );
 };
 
 const styles = {
+  floatingStack: {
+    position: "fixed",
+    left: 244,
+    right: 28,
+    bottom: 28,
+    zIndex: 30,
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    pointerEvents: "none",
+  },
   wrap: {
     flex: 1,
     overflow: "auto",
@@ -395,6 +471,17 @@ const styles = {
     borderRadius: 18,
     padding: 48,
     textAlign: "center",
+  },
+  sampleDataBtn: {
+    padding: "10px 18px",
+    borderRadius: 12,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 700,
+    fontSize: 12,
   },
   searchInput: {
     width: "100%",
@@ -451,8 +538,8 @@ const styles = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-    gap: 14,
+    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+    gap: 16,
   },
 };
 

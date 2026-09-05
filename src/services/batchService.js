@@ -24,13 +24,21 @@ const recalcSummary = (stockBatches) => {
 };
 
 export const batchService = {
-  createBatch(quantity, buyingPrice, date) {
+  // meta is optional and additive — {supplierId, supplierName, paymentMethod}
+  // records who a specific delivery came from and how it was paid for
+  // (cash, bank transfer, or Lipa Namba), not just that stock arrived.
+  // Every existing caller (editSale's restore, deleteSale's restore,
+  // sample data) keeps working untouched since meta defaults to nothing.
+  createBatch(quantity, buyingPrice, date, meta = {}) {
     return {
       id: `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       quantity,
       remaining: quantity,
       buyingPrice,
       date: date || new Date().toISOString(),
+      supplierId: meta.supplierId || null,
+      supplierName: meta.supplierName || "",
+      paymentMethod: meta.paymentMethod || "",
     };
   },
 
@@ -55,8 +63,16 @@ export const batchService = {
   // FIFO consumption — oldest batch first. Returns the real cost of THIS
   // specific sale from the batches actually consumed, plus the updated
   // product. Returns null (not a partial sale) if requested quantity
-  // exceeds total stock — a sale should never silently oversell.
+  // exceeds total stock — a sale should never silently oversell. Also
+  // returns null for a non-positive quantity — this used to silently
+  // no-op (the loop's own "already done" check short-circuits on a
+  // negative starting value), which meant a bad quantity reaching this
+  // far would record a real sale at zero cost instead of being rejected.
+  // Every caller already guards against this too, but this is the one
+  // place that actually matters — the last line of defense.
   consumeStock(product, quantitySold) {
+    if (!quantitySold || quantitySold <= 0) return null;
+
     const migrated = this.migrateProduct(product);
     const totalAvailable = migrated.stockBatches.reduce(
       (sum, b) => sum + b.remaining,
@@ -101,11 +117,22 @@ export const batchService = {
   // Adds a genuinely new batch rather than blending into one average —
   // this is what makes restocking at a different price actually mean
   // something distinct in the data, not just a recalculated number.
-  addBatch(product, quantity, buyingPrice, date) {
+  addBatch(product, quantity, buyingPrice, date, meta = {}) {
     const migrated = this.migrateProduct(product);
-    const newBatch = this.createBatch(quantity, buyingPrice, date);
+    const newBatch = this.createBatch(quantity, buyingPrice, date, meta);
     const stockBatches = [...migrated.stockBatches, newBatch];
     const { stock, buyingPrice: avgBuyingPrice } = recalcSummary(stockBatches);
     return { ...migrated, stockBatches, stock, buyingPrice: avgBuyingPrice };
+  },
+
+  // Small public helpers for the batch detail view — reuse the same
+  // summary math everything else already relies on, rather than the UI
+  // recomputing it separately and risking drift from the real logic.
+  getTotalStock(stockBatches) {
+    return recalcSummary(stockBatches || []).stock;
+  },
+
+  getWeightedAverage(stockBatches) {
+    return recalcSummary(stockBatches || []).buyingPrice;
   },
 };

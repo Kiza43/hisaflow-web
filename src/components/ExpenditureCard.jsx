@@ -45,7 +45,7 @@ const ExpenditureCard = ({ expenditure, onDelete }) => {
         <div style={styles.right}>
           <div style={styles.amount}>-{formatTZS(expenditure.amount)}</div>
           <div style={{ ...styles.typeBadge, background: style.bg }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: style.text }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: style.text }}>
               {typeLabel(expenditure.type)}
             </span>
           </div>
@@ -68,7 +68,7 @@ const styles = {
   card: {
     background: "var(--surface)",
     borderRadius: 18,
-    padding: 18,
+    padding: 20,
     border: "1px solid var(--border-muted)",
     marginBottom: 12,
   },
@@ -77,7 +77,7 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
-  description: { fontSize: 14, fontWeight: 700 },
+  description: { fontSize: 15, fontWeight: 700 },
   meta: { fontSize: 12, color: "var(--text-muted)", marginTop: 3 },
   right: { textAlign: "right" },
   amount: { fontSize: 14, fontWeight: 800, color: "var(--danger)" },

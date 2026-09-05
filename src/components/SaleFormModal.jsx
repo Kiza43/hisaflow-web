@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { salesService } from "../services/salesService";
 import { creditService } from "../services/creditService";
+import { dataService } from "../services/dataService";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const formatTZS = (amount) => {
@@ -23,10 +24,19 @@ const SaleFormModal = ({
   const [quantity, setQuantity] = useState("1");
   const [sellingPrice, setSellingPrice] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
+  const [paymentAccounts, setPaymentAccounts] = useState([]);
+  const [receivedVia, setReceivedVia] = useState("cash"); // 'cash' or an account id
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [error, setError] = useState("");
   const [completing, setCompleting] = useState(false);
+
+  useEffect(() => {
+    if (visible)
+      dataService
+        .getSettings()
+        .then((s) => setPaymentAccounts(s.paymentAccounts || []));
+  }, [visible]);
 
   const selectedProduct = useMemo(
     () => products.find((p) => p.id === productId) || null,
@@ -73,49 +83,72 @@ const SaleFormModal = ({
     }
 
     setCompleting(true);
-    const cartItem = {
-      productId,
-      productName: selectedProduct.name,
-      unit: selectedProduct.unit,
-      quantity: qtyNum,
-      sellingPrice: priceNum,
-    };
-    const result =
-      paymentMode === "credit"
-        ? await creditService.completeCreditSale({
-            cartItems: [cartItem],
-            customerName,
-            customerPhone,
-          })
-        : await salesService.completeSale({
-            productId,
+    try {
+      const cartItem = {
+        productId,
+        productName: selectedProduct.name,
+        unit: selectedProduct.unit,
+        quantity: qtyNum,
+        sellingPrice: priceNum,
+      };
+      const selectedAccount = paymentAccounts.find((a) => a.id === receivedVia);
+      const paymentMethod =
+        paymentMode === "cash"
+          ? selectedAccount
+            ? selectedAccount.type
+            : "cash"
+          : "";
+      const accountId =
+        paymentMode === "cash" ? selectedAccount?.id || null : null;
+      const accountLabel =
+        paymentMode === "cash" ? selectedAccount?.label || "" : "";
+
+      const result =
+        paymentMode === "credit"
+          ? await creditService.completeCreditSale({
+              cartItems: [cartItem],
+              customerName,
+              customerPhone,
+            })
+          : await salesService.completeSale({
+              productId,
+              quantity: qtyNum,
+              sellingPrice: priceNum,
+              paymentMethod,
+              accountId,
+              accountLabel,
+            });
+
+      if (!result.success) {
+        setError(result.error || t("saleFailedError"));
+        return;
+      }
+
+      const saleData = {
+        items: [
+          {
+            productName: selectedProduct.name,
             quantity: qtyNum,
             sellingPrice: priceNum,
-          });
-    setCompleting(false);
+          },
+        ],
+        total,
+        isCredit: paymentMode === "credit",
+        paymentMethod,
+        accountLabel,
+        customerName,
+        customerPhone,
+        date: new Date().toISOString(),
+      };
 
-    if (!result.success) {
-      setError(result.error || t("saleFailedError"));
-      return;
+      handleClose();
+      onCompleted(saleData);
+    } catch (err) {
+      console.error("Sale completion error:", err);
+      setError(t("unexpectedErrorTryAgain"));
+    } finally {
+      setCompleting(false);
     }
-
-    const saleData = {
-      items: [
-        {
-          productName: selectedProduct.name,
-          quantity: qtyNum,
-          sellingPrice: priceNum,
-        },
-      ],
-      total,
-      isCredit: paymentMode === "credit",
-      customerName,
-      customerPhone,
-      date: new Date().toISOString(),
-    };
-
-    handleClose();
-    onCompleted(saleData);
   };
 
   const handleClose = () => {
@@ -123,6 +156,7 @@ const SaleFormModal = ({
     setQuantity("1");
     setSellingPrice("");
     setPaymentMode("cash");
+    setReceivedVia("cash");
     setCustomerName("");
     setCustomerPhone("");
     setError("");
@@ -193,6 +227,35 @@ const SaleFormModal = ({
             {t("creditSaleLabel")}
           </button>
         </div>
+
+        {paymentMode === "cash" && paymentAccounts.length > 0 && (
+          <>
+            <label style={styles.label}>{t("receivedViaLabel")}</label>
+            <div style={styles.accountChipRow}>
+              <button
+                style={{
+                  ...styles.accountChip,
+                  ...(receivedVia === "cash" ? styles.accountChipActive : {}),
+                }}
+                onClick={() => setReceivedVia("cash")}
+              >
+                {t("cashMethodOption")}
+              </button>
+              {paymentAccounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  style={{
+                    ...styles.accountChip,
+                    ...(receivedVia === acc.id ? styles.accountChipActive : {}),
+                  }}
+                  onClick={() => setReceivedVia(acc.id)}
+                >
+                  {acc.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {paymentMode === "credit" && (
           <div style={styles.customerFields}>
@@ -327,6 +390,28 @@ const styles = {
     background: "var(--accent-light)",
     borderColor: "var(--accent)",
     color: "#8A5A1E",
+  },
+  accountChipRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 14,
+  },
+  accountChip: {
+    padding: "8px 14px",
+    borderRadius: 999,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 600,
+    fontSize: 12,
+  },
+  accountChipActive: {
+    background: "var(--primary-light)",
+    borderColor: "var(--primary)",
+    color: "var(--primary-dark)",
   },
   customerFields: { display: "flex", flexDirection: "column", gap: 0 },
   totalBox: {

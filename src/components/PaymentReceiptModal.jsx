@@ -20,6 +20,13 @@ const formatDateTime = (iso) => {
   );
 };
 
+const paymentMethodLabel = (method, t) => {
+  if (method === "cash") return t("cashMethodOption");
+  if (method === "bank_transfer") return t("bankTransferMethodOption");
+  if (method === "lipa_namba") return t("lipaNambaMethodOption");
+  return "";
+};
+
 // A separate receipt type from the sale receipt — this one confirms a
 // payment against an existing credit balance, not a new purchase. Shows
 // what was paid today alongside the full debt picture (total, paid to
@@ -68,6 +75,11 @@ const PaymentReceiptModal = ({ visible, payment, businessName, onClose }) => {
             <span>{t("paymentReceivedLabel")}</span>
             <span>{formatTZS(payment.paymentAmount)}</span>
           </div>
+          {payment.paymentMethod && (
+            <div style={styles.methodLine}>
+              {paymentMethodLabel(payment.paymentMethod, t)}
+            </div>
+          )}
           <div style={styles.totalsRow}>
             <span>{t("totalDebtLabel")}</span>
             <span>{formatTZS(payment.totalAmount)}</span>
@@ -150,6 +162,12 @@ const styles = {
     fontWeight: 800,
     color: "#43614F",
     marginBottom: 6,
+  },
+  methodLine: {
+    fontSize: 11,
+    color: "#78716C",
+    marginBottom: 10,
+    marginTop: -4,
   },
   totalsRow: {
     display: "flex",

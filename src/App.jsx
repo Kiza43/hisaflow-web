@@ -17,6 +17,12 @@ import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { dataService } from "./services/dataService";
 import { backupService } from "./services/backupService";
 import { setCurrentActor } from "./services/activityLogService";
+import { crashLogService } from "./services/crashLogService";
+
+// Installed once, at true module load time — not inside the component or
+// an effect — so it's active before anything else in the app has a
+// chance to throw, including the very first render.
+crashLogService.installGlobalHandlers();
 
 // Which permission (if any) a screen requires — dashboard is always
 // visible to anyone logged in, since it's just numbers, nothing
@@ -198,34 +204,46 @@ const App = () => {
                 currentUser={currentUser}
                 onLogout={handleLogout}
               />
-              {activeScreen === "dashboard" && <DashboardScreen />}
-              {activeScreen === "products" && canAccess("products") && (
-                <ProductsScreen />
-              )}
-              {activeScreen === "sales" && canAccess("sales") && (
-                <SalesScreen />
-              )}
-              {activeScreen === "credit" && canAccess("credit") && (
-                <CreditScreen />
-              )}
-              {activeScreen === "customers" && canAccess("customers") && (
-                <CustomersScreen />
-              )}
-              {activeScreen === "expenses" && canAccess("expenses") && (
-                <ExpensesScreen />
-              )}
-              {activeScreen === "suppliers" && canAccess("suppliers") && (
-                <SuppliersScreen />
-              )}
-              {activeScreen === "staff" && canAccess("staff") && (
-                <StaffScreen />
-              )}
-              {activeScreen === "activityLog" && canAccess("activityLog") && (
-                <ActivityLogScreen />
-              )}
-              {activeScreen === "settings" && canAccess("settings") && (
-                <SettingsScreen />
-              )}
+              <div
+                key={activeScreen}
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: "flex",
+                  animation: "screenFadeIn 0.18s ease",
+                }}
+              >
+                {activeScreen === "dashboard" && (
+                  <DashboardScreen onNavigate={handleNavigate} />
+                )}
+                {activeScreen === "products" && canAccess("products") && (
+                  <ProductsScreen />
+                )}
+                {activeScreen === "sales" && canAccess("sales") && (
+                  <SalesScreen />
+                )}
+                {activeScreen === "credit" && canAccess("credit") && (
+                  <CreditScreen />
+                )}
+                {activeScreen === "customers" && canAccess("customers") && (
+                  <CustomersScreen />
+                )}
+                {activeScreen === "expenses" && canAccess("expenses") && (
+                  <ExpensesScreen />
+                )}
+                {activeScreen === "suppliers" && canAccess("suppliers") && (
+                  <SuppliersScreen />
+                )}
+                {activeScreen === "staff" && canAccess("staff") && (
+                  <StaffScreen />
+                )}
+                {activeScreen === "activityLog" && canAccess("activityLog") && (
+                  <ActivityLogScreen />
+                )}
+                {activeScreen === "settings" && canAccess("settings") && (
+                  <SettingsScreen />
+                )}
+              </div>
             </div>
           </RestockCartProvider>
         </CartProvider>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { dataService } from "../services/dataService";
 import { backupService } from "../services/backupService";
+import CrashLogModal from "../components/CrashLogModal.jsx";
+import PaymentAccountsSection from "../components/PaymentAccountsSection.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const formatDateTime = (iso) => {
@@ -23,6 +25,7 @@ const SettingsScreen = () => {
   const [savingInfo, setSavingInfo] = useState(false);
   const [infoSaved, setInfoSaved] = useState(false);
   const [busy, setBusy] = useState(null); // which backup action is in flight
+  const [showCrashLog, setShowCrashLog] = useState(false);
   const [message, setMessage] = useState(null); // { type: 'success'|'error', text }
   const fileInputRef = useRef(null);
   const logoInputRef = useRef(null);
@@ -285,6 +288,15 @@ const SettingsScreen = () => {
       </div>
 
       <div style={styles.section}>
+        <h2 style={styles.sectionTitle}>{t("paymentAccountsSectionTitle")}</h2>
+        <p style={styles.sectionHint}>{t("paymentAccountsHint")}</p>
+        <PaymentAccountsSection
+          settings={settings}
+          onSettingsChange={setSettings}
+        />
+      </div>
+
+      <div style={styles.section}>
         <h2 style={styles.sectionTitle}>{t("securityQuestionSectionTitle")}</h2>
         <p style={styles.sectionHint}>
           {settings.securityQuestion?.question
@@ -489,6 +501,19 @@ const SettingsScreen = () => {
           </button>
         </div>
       </div>
+
+      <div style={styles.section}>
+        <h2 style={styles.sectionTitle}>{t("errorReportsTitle")}</h2>
+        <p style={styles.sectionHint}>{t("errorReportsHint")}</p>
+        <button style={styles.actionBtn} onClick={() => setShowCrashLog(true)}>
+          {t("viewErrorReportsButton")}
+        </button>
+      </div>
+
+      <CrashLogModal
+        visible={showCrashLog}
+        onClose={() => setShowCrashLog(false)}
+      />
     </div>
   );
 };

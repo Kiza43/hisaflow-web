@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { dataService } from "../services/dataService";
-import { syncService } from "../services/syncService";
 import { analyticsService } from "../services/analyticsService";
+import { alertService } from "../services/alertService.jsx";
+import { notificationService } from "../services/notificationService";
 import ReportModal from "../components/ReportModal.jsx";
+import WeeklyRecapModal from "../components/WeeklyRecapModal.jsx";
+import StockAlertBanner from "../components/StockAlertBanner.jsx";
+import ExpiryAlertBanner from "../components/ExpiryAlertBanner.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const formatTZS = (amount) => {
@@ -12,22 +16,30 @@ const formatTZS = (amount) => {
 
 const PERIODS = ["today", "week", "month", "all"];
 
-const DashboardScreen = () => {
+const DashboardScreen = ({ onNavigate }) => {
   const { t } = useLanguage();
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
   const [expenditures, setExpenditures] = useState([]);
-  const [syncStatus, setSyncStatus] = useState(syncService.getStatus());
   const [showReport, setShowReport] = useState(false);
+  const [showRecap, setShowRecap] = useState(false);
   const [period, setPeriod] = useState("today");
 
   useEffect(() => {
-    dataService.getProducts().then(setProducts);
+    dataService.getProducts().then((loadedProducts) => {
+      setProducts(loadedProducts);
+      const stockAlerts = alertService.getLowStockAlerts(loadedProducts);
+      const expiryAlerts = alertService.getExpiryAlerts(loadedProducts);
+      const totalAlerts = stockAlerts.total + expiryAlerts.total;
+      if (totalAlerts > 0) {
+        notificationService.showOnceThisSession(
+          t("stockAlertTitle"),
+          t("alertNotificationBody", { count: totalAlerts }),
+        );
+      }
+    });
     dataService.getSales().then(setSales);
     dataService.getExpenditures().then(setExpenditures);
-
-    const unsubscribe = syncService.onStatusChange(setSyncStatus);
-    return unsubscribe;
   }, []);
 
   const periodLabel = (p) => {
@@ -71,16 +83,27 @@ const DashboardScreen = () => {
       <div style={styles.headerRow}>
         <h1 style={styles.title}>{t("navDashboard")}</h1>
         <div style={styles.headerRight}>
-          <div style={styles.syncNote}>
-            {syncStatus.status === "offline"
-              ? t("notYetSynced")
-              : syncStatus.status}
-          </div>
+          <button style={styles.recapBtn} onClick={() => setShowRecap(true)}>
+            {t("weeklyRecapButton")}
+          </button>
           <button style={styles.exportBtn} onClick={() => setShowReport(true)}>
             {t("generateReportButton")}
           </button>
         </div>
       </div>
+
+      {onNavigate && (
+        <>
+          <StockAlertBanner
+            products={products}
+            onPress={() => onNavigate("products")}
+          />
+          <ExpiryAlertBanner
+            products={products}
+            onPress={() => onNavigate("products")}
+          />
+        </>
+      )}
 
       {products.length === 0 && sales.length === 0 && (
         <div style={styles.emptyNote}>{t("noDataYet")}</div>
@@ -190,6 +213,10 @@ const DashboardScreen = () => {
       </div>
 
       <ReportModal visible={showReport} onClose={() => setShowReport(false)} />
+      <WeeklyRecapModal
+        visible={showRecap}
+        onClose={() => setShowRecap(false)}
+      />
     </div>
   );
 };
@@ -219,8 +246,18 @@ const styles = {
     fontWeight: 700,
     fontSize: 13,
   },
+  recapBtn: {
+    padding: "10px 16px",
+    borderRadius: 12,
+    borderWidth: "1.5px",
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 700,
+    fontSize: 13,
+  },
   title: { fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" },
-  syncNote: { fontSize: 12, color: "var(--text-muted)" },
   emptyNote: {
     background: "var(--accent-light)",
     color: "#8A5A1E",

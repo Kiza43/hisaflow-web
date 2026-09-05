@@ -24,8 +24,12 @@ const CustomersScreen = () => {
     dataService.getSettings().then(setSettings);
   }, []);
 
-  const handleRecordPayment = async (creditSaleId, amount) => {
-    const result = await creditService.recordPayment(creditSaleId, amount);
+  const handleRecordPayment = async (creditSaleId, amount, paymentMethod) => {
+    const result = await creditService.recordPayment(
+      creditSaleId,
+      amount,
+      paymentMethod,
+    );
     if (result.success) await loadCreditSales();
     return result;
   };

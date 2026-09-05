@@ -48,7 +48,7 @@ const CreditCard = ({ creditSale, onPayment, onDelete, onRemindCustomer }) => {
           <div style={styles.summary}>{itemSummary(creditSale)}</div>
         </div>
         <div style={{ ...styles.statusBadge, background: status.bg }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: status.text }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: status.text }}>
             {statusLabel(creditSale.status)}
           </span>
         </div>
@@ -156,7 +156,7 @@ const styles = {
   rowValue: { fontSize: 13, fontWeight: 600 },
   actions: { display: "flex", gap: 8 },
   remindBtn: {
-    padding: "0 14px",
+    padding: "12px 14px",
     borderRadius: 12,
     border: "1.5px solid var(--border)",
     background: "var(--surface)",

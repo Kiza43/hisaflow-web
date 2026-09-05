@@ -16,7 +16,7 @@ const formatDate = (iso) => {
   });
 };
 
-const SaleCard = ({ sale }) => {
+const SaleCard = ({ sale, onEdit, onDelete }) => {
   const { t } = useLanguage();
   const profit = sale.profit || 0;
   const isProfit = profit >= 0;
@@ -27,7 +27,31 @@ const SaleCard = ({ sale }) => {
         <div style={{ flex: 1, paddingRight: 12 }}>
           <div style={styles.productName}>{sale.productName}</div>
         </div>
-        <div style={styles.date}>{formatDate(sale.date)}</div>
+        <div style={{ textAlign: "right" }}>
+          <div style={styles.date}>{formatDate(sale.date)}</div>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              justifyContent: "flex-end",
+              marginTop: 4,
+            }}
+          >
+            {onEdit && (
+              <button style={styles.editLink} onClick={() => onEdit(sale)}>
+                {t("editButton")}
+              </button>
+            )}
+            {onDelete && (
+              <button
+                style={{ ...styles.editLink, color: "var(--danger)" }}
+                onClick={() => onDelete(sale)}
+              >
+                {t("deleteButton")}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div style={styles.details}>
@@ -80,6 +104,14 @@ const styles = {
   },
   productName: { fontSize: 15, fontWeight: 700 },
   date: { fontSize: 12, color: "var(--text-muted)" },
+  editLink: {
+    background: "none",
+    border: "none",
+    fontSize: 12,
+    fontWeight: 700,
+    color: "var(--primary-dark)",
+    padding: 0,
+  },
   details: {
     display: "flex",
     flexDirection: "column",

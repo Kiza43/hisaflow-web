@@ -81,6 +81,9 @@ ipcMain.handle("data:saveActivityLog", (event, log) =>
   store.saveActivityLog(log),
 );
 
+ipcMain.handle("data:getCrashLog", () => store.getCrashLog());
+ipcMain.handle("data:saveCrashLog", (event, log) => store.saveCrashLog(log));
+
 // Opens a URL in the user's actual default browser (or, for wa.me links,
 // straight into WhatsApp Desktop if it's installed and registered as the
 // handler) — this is real, warranted use of Electron's native shell

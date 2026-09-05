@@ -22,6 +22,7 @@ export const supplierService = {
       phone: (phone || "").trim(),
       totalSupplied: 0,
       totalPaid: 0,
+      payments: [],
     };
     await dataService.saveSuppliers([...suppliers, supplier]);
     return { success: true, supplier };
@@ -49,7 +50,7 @@ export const supplierService = {
     return { success: true };
   },
 
-  async recordPayment(supplierId, amount) {
+  async recordPayment(supplierId, amount, paymentMethod) {
     if (amount <= 0) {
       return { success: false, error: "Weka kiasi sahihi" };
     }
@@ -66,7 +67,22 @@ export const supplierService = {
       };
     }
     const updated = suppliers.map((s) =>
-      s.id === supplierId ? { ...s, totalPaid: s.totalPaid + amount } : s,
+      s.id === supplierId
+        ? {
+            ...s,
+            totalPaid: s.totalPaid + amount,
+            // Suppliers added before this field existed won't have a
+            // payments array yet — default to empty rather than crash.
+            payments: [
+              ...(s.payments || []),
+              {
+                amount,
+                paymentMethod: paymentMethod || "",
+                date: new Date().toISOString(),
+              },
+            ],
+          }
+        : s,
     );
     await dataService.saveSuppliers(updated);
     await activityLogService.logActivity(

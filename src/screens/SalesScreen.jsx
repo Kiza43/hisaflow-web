@@ -3,6 +3,9 @@ import { dataService } from "../services/dataService";
 import SaleFormModal from "../components/SaleFormModal.jsx";
 import SaleCard from "../components/SaleCard.jsx";
 import ReceiptModal from "../components/ReceiptModal.jsx";
+import EditSaleModal from "../components/EditSaleModal.jsx";
+import ConfirmModal from "../components/ConfirmModal.jsx";
+import { salesService } from "../services/salesService";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const SalesScreen = () => {
@@ -13,6 +16,8 @@ const SalesScreen = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [receiptSale, setReceiptSale] = useState(null);
+  const [editingSale, setEditingSale] = useState(null);
+  const [pendingDeleteSale, setPendingDeleteSale] = useState(null);
 
   const loadAll = async () => {
     const [p, s] = await Promise.all([
@@ -28,6 +33,12 @@ const SalesScreen = () => {
     loadAll();
     dataService.getSettings().then(setSettings);
   }, []);
+
+  const confirmDeleteSale = async () => {
+    const result = await salesService.deleteSale(pendingDeleteSale.id);
+    if (result.success) await loadAll();
+    setPendingDeleteSale(null);
+  };
 
   if (loading) return null;
 
@@ -58,7 +69,12 @@ const SalesScreen = () => {
       ) : (
         <div style={styles.grid}>
           {recentSales.map((s) => (
-            <SaleCard key={s.id} sale={s} />
+            <SaleCard
+              key={s.id}
+              sale={s}
+              onEdit={setEditingSale}
+              onDelete={setPendingDeleteSale}
+            />
           ))}
         </div>
       )}
@@ -79,6 +95,23 @@ const SalesScreen = () => {
         sale={receiptSale}
         settings={settings}
         onClose={() => setReceiptSale(null)}
+      />
+
+      <EditSaleModal
+        visible={!!editingSale}
+        sale={editingSale}
+        onSaved={() => {
+          loadAll();
+          setEditingSale(null);
+        }}
+        onClose={() => setEditingSale(null)}
+      />
+
+      <ConfirmModal
+        visible={!!pendingDeleteSale}
+        message={t("confirmDeleteSaleMessage")}
+        onConfirm={confirmDeleteSale}
+        onCancel={() => setPendingDeleteSale(null)}
       />
     </div>
   );

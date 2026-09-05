@@ -30,7 +30,18 @@ function readFile(key, fallback) {
 }
 
 function writeFile(key, data) {
-  fs.writeFileSync(filePath(key), JSON.stringify(data, null, 2), "utf-8");
+  try {
+    fs.writeFileSync(filePath(key), JSON.stringify(data, null, 2), "utf-8");
+  } catch (error) {
+    // Unlike readFile, a write failure genuinely can't be silently
+    // absorbed — the data the user just entered would simply vanish.
+    // Re-throwing (rather than swallowing) preserves the existing
+    // behavior for every caller, but the clearer message means this
+    // shows up in the crash log as something actionable ("disk full" or
+    // "permission denied") instead of an opaque failure.
+    console.error(`Failed to save ${key}:`, error.message);
+    throw new Error(`Imeshindikana kuhifadhi data (${key}): ${error.message}`);
+  }
 }
 
 const store = {
@@ -56,6 +67,9 @@ const store = {
 
   getActivityLog: () => readFile("activityLog", []),
   saveActivityLog: (log) => writeFile("activityLog", log),
+
+  getCrashLog: () => readFile("crashLog", []),
+  saveCrashLog: (log) => writeFile("crashLog", log),
 
   getSettings: () =>
     readFile("settings", { businessName: "", ownerPin: "", ownerPhone: "" }),

@@ -20,6 +20,15 @@ const formatDateTime = (iso) => {
   );
 };
 
+const paymentMethodDisplay = (method, accountLabel, t) => {
+  if (method === "cash") return t("cashMethodOption");
+  const methodLabel =
+    method === "bank_transfer"
+      ? t("bankTransferMethodOption")
+      : t("lipaNambaMethodOption");
+  return accountLabel ? `${methodLabel} — ${accountLabel}` : methodLabel;
+};
+
 // sale = { items: [{productName, quantity, sellingPrice}], total, customerName?, customerPhone?, isCredit?, date }
 const ReceiptModal = ({ visible, sale, settings, onClose }) => {
   const { t } = useLanguage();
@@ -100,6 +109,12 @@ const ReceiptModal = ({ visible, sale, settings, onClose }) => {
             </div>
           )}
 
+          {!sale.isCredit && sale.paymentMethod && (
+            <div style={styles.methodLine}>
+              {paymentMethodDisplay(sale.paymentMethod, sale.accountLabel, t)}
+            </div>
+          )}
+
           {sale.isCredit && (
             <>
               <div style={styles.divider} />
@@ -176,6 +191,7 @@ const styles = {
   totalLabel: { fontSize: 14, fontWeight: 800 },
   totalValue: { fontSize: 16, fontWeight: 800 },
   creditNote: { fontSize: 12, fontWeight: 800, color: "#8A5A1E" },
+  methodLine: { fontSize: 11, color: "#78716C", marginTop: 2 },
   servedByLine: { fontSize: 10, color: "#78716C", marginTop: 8 },
   thankYou: {
     textAlign: "center",
