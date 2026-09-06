@@ -50,24 +50,29 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
       return;
     }
     setSaving(true);
-    const selectedSupplier = suppliers.find((s) => s.id === supplierId);
-    const result = await onSave({
-      productId: product.id,
-      quantity: qty,
-      buyingPrice: price,
-      supplierId: supplierId || null,
-      supplierName: selectedSupplier?.name || "",
-      paymentMethod: paymentStatus === "paid" ? paymentMethod : "",
-    });
-    if (result && result.success === false) {
+    try {
+      const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+      const result = await onSave({
+        productId: product.id,
+        quantity: qty,
+        buyingPrice: price,
+        supplierId: supplierId || null,
+        supplierName: selectedSupplier?.name || "",
+        paymentMethod: paymentStatus === "paid" ? paymentMethod : "",
+      });
+      if (result && result.success === false) {
+        setError(result.error);
+        return;
+      }
+      if (supplierId && paymentStatus === "credit") {
+        await supplierService.recordSupply(supplierId, qty * price);
+      }
+    } catch (err) {
+      console.error("Add stock error:", err);
+      setError(t("unexpectedErrorTryAgain"));
+    } finally {
       setSaving(false);
-      setError(result.error);
-      return;
     }
-    if (supplierId && paymentStatus === "credit") {
-      await supplierService.recordSupply(supplierId, qty * price);
-    }
-    setSaving(false);
   };
 
   return (

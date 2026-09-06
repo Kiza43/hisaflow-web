@@ -22,18 +22,24 @@ const ExpenditureFormModal = ({ visible, onSave, onClose }) => {
       return;
     }
     setSaving(true);
-    await onSave({
-      id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      description: description.trim(),
-      amount: amt,
-      type,
-      date: new Date().toISOString(),
-    });
-    setDescription("");
-    setAmount("");
-    setType("operational");
-    setError("");
-    setSaving(false);
+    try {
+      await onSave({
+        id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        description: description.trim(),
+        amount: amt,
+        type,
+        date: new Date().toISOString(),
+      });
+      setDescription("");
+      setAmount("");
+      setType("operational");
+      setError("");
+    } catch (err) {
+      console.error("Expenditure save error:", err);
+      setError(t("unexpectedErrorTryAgain"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleClose = () => {

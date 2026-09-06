@@ -49,9 +49,15 @@ const StaffFormModal = ({ visible, editingStaff, onSave, onClose }) => {
 
   const handleSave = async () => {
     setSaving(true);
-    const result = await onSave({ name, pin, permissions });
-    setSaving(false);
-    if (!result.success) setError(result.error);
+    try {
+      const result = await onSave({ name, pin, permissions });
+      if (!result.success) setError(result.error);
+    } catch (err) {
+      console.error("Staff save error:", err);
+      setError(t("unexpectedErrorTryAgain"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

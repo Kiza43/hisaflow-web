@@ -38,17 +38,23 @@ const EditSaleModal = ({ visible, sale, onSaved, onClose }) => {
       return;
     }
     setSaving(true);
-    const result = await salesService.editSale(sale.id, {
-      quantity: qty,
-      sellingPrice: price,
-      notes: notes.trim(),
-    });
-    setSaving(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+    try {
+      const result = await salesService.editSale(sale.id, {
+        quantity: qty,
+        sellingPrice: price,
+        notes: notes.trim(),
+      });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      onSaved();
+    } catch (err) {
+      console.error("Edit sale error:", err);
+      setError(t("unexpectedErrorTryAgain"));
+    } finally {
+      setSaving(false);
     }
-    onSaved();
   };
 
   return (

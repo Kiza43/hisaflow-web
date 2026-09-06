@@ -26,15 +26,21 @@ const RecordPaymentModal = ({ visible, creditSale, onSave, onClose }) => {
   const handleSave = async () => {
     const amt = parseFloat(amount) || 0;
     setSaving(true);
-    const result = await onSave(creditSale.id, amt, paymentMethod);
-    setSaving(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+    try {
+      const result = await onSave(creditSale.id, amt, paymentMethod);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      setAmount("");
+      setPaymentMethod("cash");
+      setError("");
+    } catch (err) {
+      console.error("Credit payment error:", err);
+      setError(t("unexpectedErrorTryAgain"));
+    } finally {
+      setSaving(false);
     }
-    setAmount("");
-    setPaymentMethod("cash");
-    setError("");
   };
 
   return (

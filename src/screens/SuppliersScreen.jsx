@@ -19,6 +19,7 @@ const SuppliersScreen = () => {
   const [showForm, setShowForm] = useState(false);
   const [payingSupplier, setPayingSupplier] = useState(null);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadSuppliers = () =>
     dataService.getSuppliers().then((data) => {
@@ -37,9 +38,17 @@ const SuppliersScreen = () => {
   };
 
   const confirmDelete = async () => {
-    await supplierService.deleteSupplier(pendingDeleteId);
-    await loadSuppliers();
-    setPendingDeleteId(null);
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await supplierService.deleteSupplier(pendingDeleteId);
+      await loadSuppliers();
+      setPendingDeleteId(null);
+    } catch (err) {
+      console.error("Delete supplier error:", err);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handlePayment = async (supplierId, amount, paymentMethod) => {
@@ -130,6 +139,7 @@ const SuppliersScreen = () => {
         message={t("confirmDeleteSupplier")}
         onConfirm={confirmDelete}
         onCancel={() => setPendingDeleteId(null)}
+        busy={deleting}
       />
     </div>
   );

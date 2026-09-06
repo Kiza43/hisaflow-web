@@ -12,15 +12,21 @@ const SupplierFormModal = ({ visible, onSave, onClose }) => {
 
   const handleSave = async () => {
     setSaving(true);
-    const result = await onSave({ name, phone });
-    setSaving(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+    try {
+      const result = await onSave({ name, phone });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      setName("");
+      setPhone("");
+      setError("");
+    } catch (err) {
+      console.error("Supplier save error:", err);
+      setError(t("unexpectedErrorTryAgain"));
+    } finally {
+      setSaving(false);
     }
-    setName("");
-    setPhone("");
-    setError("");
   };
 
   const handleClose = () => {

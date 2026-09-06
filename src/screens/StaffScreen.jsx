@@ -13,6 +13,7 @@ const StaffScreen = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadStaff = () =>
     dataService.getStaff().then((data) => {
@@ -37,9 +38,17 @@ const StaffScreen = () => {
   };
 
   const confirmDelete = async () => {
-    await staffService.deleteStaff(pendingDeleteId);
-    await loadStaff();
-    setPendingDeleteId(null);
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await staffService.deleteStaff(pendingDeleteId);
+      await loadStaff();
+      setPendingDeleteId(null);
+    } catch (err) {
+      console.error("Delete staff error:", err);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) return null;
@@ -99,6 +108,7 @@ const StaffScreen = () => {
         message={t("confirmDeleteStaff")}
         onConfirm={confirmDelete}
         onCancel={() => setPendingDeleteId(null)}
+        busy={deleting}
       />
     </div>
   );

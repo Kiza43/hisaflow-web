@@ -105,39 +105,46 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
     const stock = parseInt(form.stock, 10) || 0;
 
     setSaving(true);
-    await onSave({
-      product: {
-        id: editingProduct
-          ? editingProduct.id
-          : `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        name: form.name.trim(),
-        category: form.category.trim(),
-        brand: form.brand.trim(),
-        unit: form.unit,
-        stock,
-        buyingPrice,
-        sellingPrice,
-        imageUri: form.imageUri || null,
-        expiryDate: form.expiryDate || null,
-      },
-      // Only meaningful for genuinely new stock entering the shop — editing
-      // an existing product's price shouldn't retroactively create a new
-      // supplier debt for stock that's already been there.
-      supplierLink:
-        !editingProduct && form.supplierId && stock > 0
-          ? {
-              supplierId: form.supplierId,
-              supplierName:
-                suppliers.find((s) => s.id === form.supplierId)?.name || "",
-              amount: stock * buyingPrice,
-              isCredit: form.supplierPaymentStatus === "credit",
-              paymentMethod:
-                form.supplierPaymentStatus === "paid"
-                  ? form.supplierPaymentMethod
-                  : "",
-            }
-          : null,
-    });
+    try {
+      await onSave({
+        product: {
+          id: editingProduct
+            ? editingProduct.id
+            : `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          name: form.name.trim(),
+          category: form.category.trim(),
+          brand: form.brand.trim(),
+          unit: form.unit,
+          stock,
+          buyingPrice,
+          sellingPrice,
+          imageUri: form.imageUri || null,
+          expiryDate: form.expiryDate || null,
+        },
+        // Only meaningful for genuinely new stock entering the shop — editing
+        // an existing product's price shouldn't retroactively create a new
+        // supplier debt for stock that's already been there.
+        supplierLink:
+          !editingProduct && form.supplierId && stock > 0
+            ? {
+                supplierId: form.supplierId,
+                supplierName:
+                  suppliers.find((s) => s.id === form.supplierId)?.name || "",
+                amount: stock * buyingPrice,
+                isCredit: form.supplierPaymentStatus === "credit",
+                paymentMethod:
+                  form.supplierPaymentStatus === "paid"
+                    ? form.supplierPaymentMethod
+                    : "",
+              }
+            : null,
+      });
+    } catch (err) {
+      console.error("Product save error:", err);
+      setError(t("unexpectedErrorTryAgain"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

@@ -12,18 +12,19 @@ const ConfirmModal = ({
   onConfirm,
   onCancel,
   danger = true,
+  busy = false,
 }) => {
   const { t } = useLanguage();
   if (!visible) return null;
 
   return (
-    <div style={styles.overlay} onClick={onCancel}>
+    <div style={styles.overlay} onClick={busy ? undefined : onCancel}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         {title && <h2 style={styles.title}>{title}</h2>}
         <p style={styles.message}>{message}</p>
 
         <div style={styles.actions}>
-          <button style={styles.cancelBtn} onClick={onCancel}>
+          <button style={styles.cancelBtn} disabled={busy} onClick={onCancel}>
             {t("cancelButton")}
           </button>
           <button
@@ -31,9 +32,10 @@ const ConfirmModal = ({
               ...styles.confirmBtn,
               ...(danger ? styles.confirmBtnDanger : {}),
             }}
+            disabled={busy}
             onClick={onConfirm}
           >
-            {t("deleteButton")}
+            {busy ? t("completing") : t("deleteButton")}
           </button>
         </div>
       </div>

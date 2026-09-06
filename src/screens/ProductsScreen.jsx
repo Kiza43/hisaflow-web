@@ -45,6 +45,7 @@ const ProductsScreen = () => {
   const [showRestockCart, setShowRestockCart] = useState(false);
   const [receiptSale, setReceiptSale] = useState(null);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [showPoster, setShowPoster] = useState(false);
   const [notifyBuyersProduct, setNotifyBuyersProduct] = useState(null);
   const [viewingBatchesProduct, setViewingBatchesProduct] = useState(null);
@@ -109,11 +110,19 @@ const ProductsScreen = () => {
   const handleDelete = (productId) => setPendingDeleteId(productId);
 
   const confirmDelete = async () => {
-    const removed = products.find((p) => p.id === pendingDeleteId);
-    await persist(products.filter((p) => p.id !== pendingDeleteId));
-    if (removed)
-      await activityLogService.logActivity("deleted a product", removed.name);
-    setPendingDeleteId(null);
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const removed = products.find((p) => p.id === pendingDeleteId);
+      await persist(products.filter((p) => p.id !== pendingDeleteId));
+      if (removed)
+        await activityLogService.logActivity("deleted a product", removed.name);
+      setPendingDeleteId(null);
+    } catch (err) {
+      console.error("Delete product error:", err);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleAddSampleProducts = async () => {
@@ -401,6 +410,7 @@ const ProductsScreen = () => {
         message={t("confirmDeleteProduct")}
         onConfirm={confirmDelete}
         onCancel={() => setPendingDeleteId(null)}
+        busy={deleting}
       />
 
       <PosterModal visible={showPoster} onClose={() => setShowPoster(false)} />

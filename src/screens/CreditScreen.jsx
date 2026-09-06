@@ -20,6 +20,7 @@ const CreditScreen = () => {
   const [loading, setLoading] = useState(true);
   const [payingCreditSale, setPayingCreditSale] = useState(null);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [remindingCreditSale, setRemindingCreditSale] = useState(null);
   const [paymentReceipt, setPaymentReceipt] = useState(null);
 
@@ -63,9 +64,17 @@ const CreditScreen = () => {
   };
 
   const confirmDelete = async () => {
-    const result = await creditService.deleteCreditSale(pendingDeleteId);
-    if (result.success) await loadCreditSales();
-    setPendingDeleteId(null);
+    if (deleting) return; // already in flight — a second click here could restore stock twice
+    setDeleting(true);
+    try {
+      const result = await creditService.deleteCreditSale(pendingDeleteId);
+      if (result.success) await loadCreditSales();
+      setPendingDeleteId(null);
+    } catch (err) {
+      console.error("Delete credit sale error:", err);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) return null;
@@ -139,6 +148,7 @@ const CreditScreen = () => {
         message={t("confirmDeleteCreditSale")}
         onConfirm={confirmDelete}
         onCancel={() => setPendingDeleteId(null)}
+        busy={deleting}
       />
 
       <RemindCustomerModal

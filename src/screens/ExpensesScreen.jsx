@@ -17,6 +17,7 @@ const ExpensesScreen = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     dataService.getExpenditures().then((data) => {
@@ -33,16 +34,24 @@ const ExpensesScreen = () => {
   };
 
   const confirmDelete = async () => {
-    const removed = expenditures.find((exp) => exp.id === pendingDeleteId);
-    const updated = expenditures.filter((exp) => exp.id !== pendingDeleteId);
-    setExpenditures(updated);
-    await dataService.saveExpenditures(updated);
-    if (removed)
-      await activityLogService.logActivity(
-        "deleted an expense",
-        removed.description,
-      );
-    setPendingDeleteId(null);
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const removed = expenditures.find((exp) => exp.id === pendingDeleteId);
+      const updated = expenditures.filter((exp) => exp.id !== pendingDeleteId);
+      setExpenditures(updated);
+      await dataService.saveExpenditures(updated);
+      if (removed)
+        await activityLogService.logActivity(
+          "deleted an expense",
+          removed.description,
+        );
+      setPendingDeleteId(null);
+    } catch (err) {
+      console.error("Delete expenditure error:", err);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) return null;
@@ -115,6 +124,7 @@ const ExpensesScreen = () => {
         message={t("confirmDeleteExpenditure")}
         onConfirm={confirmDelete}
         onCancel={() => setPendingDeleteId(null)}
+        busy={deleting}
       />
     </div>
   );
