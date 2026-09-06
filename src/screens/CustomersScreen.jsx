@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { dataService } from "../services/dataService";
 import { customerService } from "../services/customerService";
 import { creditService } from "../services/creditService";
@@ -34,11 +34,21 @@ const CustomersScreen = () => {
     return result;
   };
 
-  if (loading) return null;
+  // Aggregating every credit sale into per-customer profiles is real work
+  // once there's meaningful transaction history — memoized so it only
+  // recomputes when the underlying credit sales actually change, not on
+  // every render (e.g. just opening a customer's profile modal).
+  const customers = useMemo(
+    () => customerService.getCustomerProfiles(creditSales),
+    [creditSales],
+  );
+  const openCustomer = useMemo(
+    () =>
+      customers.find((c) => (c.phone || c.name) === openCustomerKey) || null,
+    [customers, openCustomerKey],
+  );
 
-  const customers = customerService.getCustomerProfiles(creditSales);
-  const openCustomer =
-    customers.find((c) => (c.phone || c.name) === openCustomerKey) || null;
+  if (loading) return null;
 
   return (
     <div style={styles.wrap}>

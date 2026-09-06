@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { dataService } from "../services/dataService";
 import ProductFormModal from "../components/ProductFormModal.jsx";
 import ProductCard from "../components/ProductCard.jsx";
@@ -156,40 +156,54 @@ const ProductsScreen = () => {
     return result;
   };
 
-  if (loading) return null;
-
-  const categories = filterService.getCategories(products);
-  const brands = filterService.getBrands(products);
-
-  const quantityByProduct = {};
-  sales.forEach((s) => {
-    quantityByProduct[s.productId] =
-      (quantityByProduct[s.productId] || 0) + (s.quantity || 0);
-  });
+  const categories = useMemo(
+    () => filterService.getCategories(products),
+    [products],
+  );
+  const brands = useMemo(() => filterService.getBrands(products), [products]);
 
   // Search first, then attribute filters, then either a best-sellers
   // ranking or the chosen sort — search narrows the working set before
-  // anything else touches it, same order the phone app uses.
-  let displayedProducts = searchService.searchProducts(products, searchQuery);
-  displayedProducts = filterService.filterProducts(displayedProducts, {
-    category: categoryFilter,
-    brand: brandFilter,
-    stockStatus: stockStatusFilter,
-  });
-
-  if (showBestSellers) {
-    displayedProducts = displayedProducts
-      .filter((p) => quantityByProduct[p.id] > 0)
-      .sort(
-        (a, b) =>
-          (quantityByProduct[b.id] || 0) - (quantityByProduct[a.id] || 0),
-      );
-  } else {
-    displayedProducts = filterService.filterProducts(displayedProducts, {
-      sortBy,
-      sortOrder,
+  // anything else touches it, same order the phone app uses. Recomputes
+  // only when something that actually affects the result changes, not on
+  // every render — this list was previously rebuilt from scratch even
+  // when, say, an unrelated modal opened.
+  const displayedProducts = useMemo(() => {
+    const quantityByProduct = {};
+    sales.forEach((s) => {
+      quantityByProduct[s.productId] =
+        (quantityByProduct[s.productId] || 0) + (s.quantity || 0);
     });
-  }
+
+    let result = searchService.searchProducts(products, searchQuery);
+    result = filterService.filterProducts(result, {
+      category: categoryFilter,
+      brand: brandFilter,
+      stockStatus: stockStatusFilter,
+    });
+
+    if (showBestSellers) {
+      return result
+        .filter((p) => quantityByProduct[p.id] > 0)
+        .sort(
+          (a, b) =>
+            (quantityByProduct[b.id] || 0) - (quantityByProduct[a.id] || 0),
+        );
+    }
+    return filterService.filterProducts(result, { sortBy, sortOrder });
+  }, [
+    products,
+    sales,
+    searchQuery,
+    categoryFilter,
+    brandFilter,
+    stockStatusFilter,
+    showBestSellers,
+    sortBy,
+    sortOrder,
+  ]);
+
+  if (loading) return null;
 
   return (
     <div style={styles.wrap}>

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { dataService } from "../services/dataService";
 import { analyticsService } from "../services/analyticsService";
-import { alertService } from "../services/alertService.jsx";
+import { alertService } from "../services/alertService";
 import { notificationService } from "../services/notificationService";
 import ReportModal from "../components/ReportModal.jsx";
 import WeeklyRecapModal from "../components/WeeklyRecapModal.jsx";
@@ -51,32 +51,52 @@ const DashboardScreen = ({ onNavigate }) => {
 
   // Filter first, then rank — best sellers "this week" means best sellers
   // among sales that actually happened this week, not an all-time ranking
-  // just relabeled.
-  const periodSales = analyticsService.filterSalesByPeriod(sales, period);
-  const periodExpenditures = analyticsService.filterSalesByPeriod(
-    expenditures,
-    period,
-  );
+  // just relabeled. Memoized since this previously recomputed on every
+  // render, including ones caused by unrelated state like a modal toggle.
+  const {
+    totalRevenue,
+    grossProfit,
+    totalExpenses,
+    netProfit,
+    bestSellers,
+    mostProfitable,
+    maxSellerQty,
+    maxProfitAmount,
+  } = useMemo(() => {
+    const periodSales = analyticsService.filterSalesByPeriod(sales, period);
+    const periodExpenditures = analyticsService.filterSalesByPeriod(
+      expenditures,
+      period,
+    );
 
-  const totalRevenue = periodSales.reduce(
-    (sum, s) => sum + (s.totalRevenue || 0),
-    0,
-  );
-  const grossProfit = periodSales.reduce((sum, s) => sum + (s.profit || 0), 0);
-  const totalExpenses = periodExpenditures.reduce(
-    (sum, exp) => sum + (exp.amount || 0),
-    0,
-  );
-  const netProfit = grossProfit - totalExpenses;
+    const revenue = periodSales.reduce(
+      (sum, s) => sum + (s.totalRevenue || 0),
+      0,
+    );
+    const profit = periodSales.reduce((sum, s) => sum + (s.profit || 0), 0);
+    const expenses = periodExpenditures.reduce(
+      (sum, exp) => sum + (exp.amount || 0),
+      0,
+    );
 
-  const bestSellers = analyticsService.getBestSellers(products, periodSales, 5);
-  const mostProfitable = analyticsService.getMostProfitable(
-    products,
-    periodSales,
-    5,
-  );
-  const maxSellerQty = bestSellers[0]?.quantity || 1;
-  const maxProfitAmount = mostProfitable[0]?.profit || 1;
+    const sellers = analyticsService.getBestSellers(products, periodSales, 5);
+    const profitable = analyticsService.getMostProfitable(
+      products,
+      periodSales,
+      5,
+    );
+
+    return {
+      totalRevenue: revenue,
+      grossProfit: profit,
+      totalExpenses: expenses,
+      netProfit: profit - expenses,
+      bestSellers: sellers,
+      mostProfitable: profitable,
+      maxSellerQty: sellers[0]?.quantity || 1,
+      maxProfitAmount: profitable[0]?.profit || 1,
+    };
+  }, [sales, expenditures, products, period]);
 
   return (
     <div style={styles.wrap}>
