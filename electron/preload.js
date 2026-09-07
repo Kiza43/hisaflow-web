@@ -32,6 +32,18 @@ contextBridge.exposeInMainWorld("hisaflow", {
   getCrashLog: () => ipcRenderer.invoke("data:getCrashLog"),
   saveCrashLog: (log) => ipcRenderer.invoke("data:saveCrashLog", log),
 
+  completeSale: (args) => ipcRenderer.invoke("sales:completeSale", args),
+  completeCartSale: (cartItems, meta) =>
+    ipcRenderer.invoke("sales:completeCartSale", cartItems, meta),
+  completeCreditSale: (args) =>
+    ipcRenderer.invoke("credit:completeCreditSale", args),
+
+  addStaff: (args) => ipcRenderer.invoke("staff:addStaff", args),
+  updateStaff: (staffId, args) =>
+    ipcRenderer.invoke("staff:updateStaff", staffId, args),
+  deleteStaff: (staffId) => ipcRenderer.invoke("staff:deleteStaff", staffId),
+  identifyStaffByPin: (pin) => ipcRenderer.invoke("staff:identifyByPin", pin),
+
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 
   copyImageToClipboard: (dataUrl) =>

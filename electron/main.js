@@ -7,7 +7,7 @@ const {
   nativeImage,
 } = require("electron");
 const path = require("path");
-const { store } = require("./store");
+const queries = require("./queries");
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -48,41 +48,66 @@ app.on("window-all-closed", () => {
 });
 
 // Every data operation the renderer needs goes through these explicit,
-// narrow IPC handlers — the renderer process never touches the filesystem
+// narrow IPC handlers — the renderer process never touches the database
 // directly (contextIsolation + no nodeIntegration above enforces this).
-ipcMain.handle("data:getProducts", () => store.getProducts());
+// The interface here is unchanged from the old JSON-file version — every
+// service in the renderer calls these exact same functions. What's
+// different is what happens behind them: saves now run inside a real
+// SQLite transaction, closing the race-condition gap structurally.
+ipcMain.handle("data:getProducts", () => queries.getProducts());
 ipcMain.handle("data:saveProducts", (event, products) =>
-  store.saveProducts(products),
+  queries.saveProducts(products),
 );
 
-ipcMain.handle("data:getSales", () => store.getSales());
-ipcMain.handle("data:saveSales", (event, sales) => store.saveSales(sales));
+ipcMain.handle("data:getSales", () => queries.getSales());
+ipcMain.handle("data:saveSales", (event, sales) => queries.saveSales(sales));
 
-ipcMain.handle("data:getCreditSales", () => store.getCreditSales());
+ipcMain.handle("data:getCreditSales", () => queries.getCreditSales());
 ipcMain.handle("data:saveCreditSales", (event, creditSales) =>
-  store.saveCreditSales(creditSales),
+  queries.saveCreditSales(creditSales),
 );
 
-ipcMain.handle("data:getExpenditures", () => store.getExpenditures());
+ipcMain.handle("data:getExpenditures", () => queries.getExpenditures());
 ipcMain.handle("data:saveExpenditures", (event, expenditures) =>
-  store.saveExpenditures(expenditures),
+  queries.saveExpenditures(expenditures),
 );
 
-ipcMain.handle("data:getSuppliers", () => store.getSuppliers());
+ipcMain.handle("data:getSuppliers", () => queries.getSuppliers());
 ipcMain.handle("data:saveSuppliers", (event, suppliers) =>
-  store.saveSuppliers(suppliers),
+  queries.saveSuppliers(suppliers),
 );
 
-ipcMain.handle("data:getStaff", () => store.getStaff());
-ipcMain.handle("data:saveStaff", (event, staff) => store.saveStaff(staff));
+ipcMain.handle("data:getStaff", () => queries.getStaff());
+ipcMain.handle("data:saveStaff", (event, staff) => queries.saveStaff(staff));
 
-ipcMain.handle("data:getActivityLog", () => store.getActivityLog());
+ipcMain.handle("data:getActivityLog", () => queries.getActivityLog());
 ipcMain.handle("data:saveActivityLog", (event, log) =>
-  store.saveActivityLog(log),
+  queries.saveActivityLog(log),
 );
 
-ipcMain.handle("data:getCrashLog", () => store.getCrashLog());
-ipcMain.handle("data:saveCrashLog", (event, log) => store.saveCrashLog(log));
+ipcMain.handle("data:getCrashLog", () => queries.getCrashLog());
+ipcMain.handle("data:saveCrashLog", (event, log) => queries.saveCrashLog(log));
+
+ipcMain.handle("sales:completeSale", (event, args) =>
+  queries.completeSale(args),
+);
+ipcMain.handle("sales:completeCartSale", (event, cartItems, meta) =>
+  queries.completeCartSale(cartItems, meta),
+);
+ipcMain.handle("credit:completeCreditSale", (event, args) =>
+  queries.completeCreditSale(args),
+);
+
+ipcMain.handle("staff:addStaff", (event, args) => queries.addStaff(args));
+ipcMain.handle("staff:updateStaff", (event, staffId, args) =>
+  queries.updateStaff(staffId, args),
+);
+ipcMain.handle("staff:deleteStaff", (event, staffId) =>
+  queries.deleteStaff(staffId),
+);
+ipcMain.handle("staff:identifyByPin", (event, pin) =>
+  queries.identifyStaffByPin(pin),
+);
 
 // Opens a URL in the user's actual default browser (or, for wa.me links,
 // straight into WhatsApp Desktop if it's installed and registered as the
@@ -101,7 +126,7 @@ ipcMain.handle("clipboard:writeImage", (event, dataUrl) => {
   clipboard.writeImage(image);
 });
 
-ipcMain.handle("data:getSettings", () => store.getSettings());
+ipcMain.handle("data:getSettings", () => queries.getSettings());
 ipcMain.handle("data:saveSettings", (event, settings) =>
-  store.saveSettings(settings),
+  queries.saveSettings(settings),
 );

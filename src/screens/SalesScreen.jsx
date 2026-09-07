@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { dataService } from "../services/dataService";
 import SaleFormModal from "../components/SaleFormModal.jsx";
 import SaleCard from "../components/SaleCard.jsx";
 import ReceiptModal from "../components/ReceiptModal.jsx";
 import EditSaleModal from "../components/EditSaleModal.jsx";
 import ConfirmModal from "../components/ConfirmModal.jsx";
+import Pagination from "../components/Pagination.jsx";
 import { salesService } from "../services/salesService";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
@@ -40,11 +41,29 @@ const SalesScreen = () => {
     setPendingDeleteSale(null);
   };
 
-  if (loading) return null;
+  const recentSales = useMemo(
+    () => sales.slice().sort((a, b) => new Date(b.date) - new Date(a.date)),
+    [sales],
+  );
 
-  const recentSales = sales
-    .slice()
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const PAGE_SIZE = 24;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(recentSales.length / PAGE_SIZE));
+  const pagedSales = useMemo(
+    () =>
+      recentSales.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [recentSales, currentPage],
+  );
+
+  // Safety clamp only — unlike ProductsScreen there's no search/filter
+  // state here to reset on, since this screen has none. A sale being
+  // deleted while on a later page is the only way the current page could
+  // become invalid.
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  if (loading) return null;
 
   return (
     <div style={styles.wrap}>
@@ -67,16 +86,23 @@ const SalesScreen = () => {
           </div>
         </div>
       ) : (
-        <div style={styles.grid}>
-          {recentSales.map((s) => (
-            <SaleCard
-              key={s.id}
-              sale={s}
-              onEdit={setEditingSale}
-              onDelete={setPendingDeleteSale}
-            />
-          ))}
-        </div>
+        <>
+          <div style={styles.grid}>
+            {pagedSales.map((s) => (
+              <SaleCard
+                key={s.id}
+                sale={s}
+                onEdit={setEditingSale}
+                onDelete={setPendingDeleteSale}
+              />
+            ))}
+          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </>
       )}
 
       <SaleFormModal

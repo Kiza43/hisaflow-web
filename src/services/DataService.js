@@ -29,6 +29,16 @@ export const dataService = {
   getCrashLog: () => window.hisaflow.getCrashLog(),
   saveCrashLog: (log) => window.hisaflow.saveCrashLog(log),
 
+  completeSale: (args) => window.hisaflow.completeSale(args),
+  completeCartSale: (cartItems, meta) =>
+    window.hisaflow.completeCartSale(cartItems, meta),
+  completeCreditSale: (args) => window.hisaflow.completeCreditSale(args),
+
+  addStaff: (args) => window.hisaflow.addStaff(args),
+  updateStaff: (staffId, args) => window.hisaflow.updateStaff(staffId, args),
+  deleteStaff: (staffId) => window.hisaflow.deleteStaff(staffId),
+  identifyStaffByPin: (pin) => window.hisaflow.identifyStaffByPin(pin),
+
   getSettings: () => window.hisaflow.getSettings(),
   saveSettings: (settings) => window.hisaflow.saveSettings(settings),
 };

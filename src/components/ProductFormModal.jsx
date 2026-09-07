@@ -37,8 +37,17 @@ const emptyForm = {
   supplierPaymentMethod: "cash",
 };
 
+// Same 3-step structure the phone app uses (basics / pricing / stock),
+// carried over deliberately rather than redesigned — one long scrolling
+// form was the actual complaint, and this is the proven fix for it,
+// not a fresh guess at what "better" looks like. Desktop's extra brand
+// field lives in step 1 alongside category, the closest match to where
+// the phone app groups it conceptually.
+const STEPS = ["basics", "pricing", "stock"];
+
 const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
   const { t } = useLanguage();
+  const [step, setStep] = useState(0);
   const [form, setForm] = useState(emptyForm);
   const [showCustomUnit, setShowCustomUnit] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
@@ -75,6 +84,7 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
       setForm(emptyForm);
       setShowCustomUnit(false);
     }
+    setStep(0);
     setError("");
     setSaving(false);
   }, [editingProduct, visible]);
@@ -90,18 +100,45 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
     reader.readAsDataURL(file);
   };
 
+  // Same validation rules as before, just checked per-step rather than
+  // all at once at the very end — a name typo on step 1 gets caught
+  // immediately instead of after filling in pricing and stock too.
+  const validateStep = (stepIndex) => {
+    setError("");
+    if (stepIndex === 0) {
+      if (!form.name.trim()) {
+        setError(t("enterProductNameError"));
+        return false;
+      }
+      return true;
+    }
+    if (stepIndex === 1) {
+      const sellingPrice = parseFloat(form.sellingPrice) || 0;
+      if (sellingPrice <= 0) {
+        setError(t("enterValidSellingPriceError"));
+        return false;
+      }
+      return true;
+    }
+    return true;
+  };
+
+  const goNext = () => {
+    if (!validateStep(step)) return;
+    setStep((s) => Math.min(s + 1, STEPS.length - 1));
+  };
+
+  const goBack = () => {
+    setError("");
+    setStep((s) => Math.max(s - 1, 0));
+  };
+
   const handleSave = async () => {
     if (saving) return; // already in flight — a second click here shouldn't create a duplicate product/batch
-    if (!form.name.trim()) {
-      setError(t("enterProductNameError"));
-      return;
-    }
+    if (!validateStep(0) || !validateStep(1)) return;
+
     const sellingPrice = parseFloat(form.sellingPrice) || 0;
     const buyingPrice = parseFloat(form.buyingPrice) || 0;
-    if (sellingPrice <= 0) {
-      setError(t("enterValidSellingPriceError"));
-      return;
-    }
     const stock = parseInt(form.stock, 10) || 0;
 
     setSaving(true);
@@ -147,6 +184,13 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
     }
   };
 
+  const isLastStep = step === STEPS.length - 1;
+  const stepLabel = (i) => {
+    if (i === 0) return t("stepBasics");
+    if (i === 1) return t("stepPricing");
+    return t("stepStock");
+  };
+
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -154,91 +198,140 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
           {editingProduct ? t("editProductTitle") : t("addProductTitle")}
         </h2>
 
+        <div style={styles.stepRow}>
+          {STEPS.map((key, i) => (
+            <React.Fragment key={key}>
+              <div
+                style={{
+                  ...styles.stepDot,
+                  ...(i <= step ? styles.stepDotActive : {}),
+                }}
+              >
+                {i < step ? "✓" : i + 1}
+              </div>
+              {i < STEPS.length - 1 && (
+                <div
+                  style={{
+                    ...styles.stepLine,
+                    ...(i < step ? styles.stepLineActive : {}),
+                  }}
+                />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+        <div style={styles.stepIndicatorText}>
+          {t("stepIndicator", {
+            step: step + 1,
+            total: STEPS.length,
+            label: stepLabel(step),
+          })}
+        </div>
+
         {error && <div style={styles.error}>{error}</div>}
 
-        <div style={styles.photoRow}>
-          <div
-            style={styles.photoPreview}
-            onClick={() => fileInputRef.current.click()}
-          >
-            {form.imageUri && (
-              <img src={form.imageUri} alt="" style={styles.photoImg} />
-            )}
-          </div>
-          <div>
-            <button
-              style={styles.photoBtn}
-              onClick={() => fileInputRef.current.click()}
-            >
-              {form.imageUri ? t("changePhoto") : t("addPhoto")}
-            </button>
-            {form.imageUri && (
-              <button
-                style={styles.removePhotoBtn}
-                onClick={() => setForm((prev) => ({ ...prev, imageUri: null }))}
+        {step === 0 && (
+          <>
+            <div style={styles.photoRow}>
+              <div
+                style={styles.photoPreview}
+                onClick={() => fileInputRef.current.click()}
               >
-                {t("removePhoto")}
-              </button>
-            )}
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handlePickImage}
-            style={{ display: "none" }}
-          />
-        </div>
+                {form.imageUri && (
+                  <img src={form.imageUri} alt="" style={styles.photoImg} />
+                )}
+              </div>
+              <div>
+                <button
+                  style={styles.photoBtn}
+                  onClick={() => fileInputRef.current.click()}
+                >
+                  {form.imageUri ? t("changePhoto") : t("addPhoto")}
+                </button>
+                {form.imageUri && (
+                  <button
+                    style={styles.removePhotoBtn}
+                    onClick={() =>
+                      setForm((prev) => ({ ...prev, imageUri: null }))
+                    }
+                  >
+                    {t("removePhoto")}
+                  </button>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePickImage}
+                style={{ display: "none" }}
+              />
+            </div>
 
-        <label style={styles.label}>{t("productNameLabel")}</label>
-        <input
-          style={styles.input}
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder={t("productNamePlaceholder")}
-          autoFocus
-        />
-
-        <div style={styles.row}>
-          <div style={{ flex: 1 }}>
-            <label style={styles.label}>{t("categoryLabel")}</label>
+            <label style={styles.label}>{t("productNameLabel")}</label>
             <input
               style={styles.input}
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              placeholder={t("categoryPlaceholder")}
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder={t("productNamePlaceholder")}
+              autoFocus
             />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label style={styles.label}>{t("brandLabel")}</label>
-            <input
-              style={styles.input}
-              value={form.brand}
-              onChange={(e) => setForm({ ...form, brand: e.target.value })}
-              placeholder={t("brandPlaceholder")}
-            />
-          </div>
-        </div>
 
-        <div style={styles.row}>
-          <div style={{ flex: 1 }}>
-            <label style={styles.label}>{t("stockLabel")}</label>
-            <input
-              style={{
-                ...styles.input,
-                ...(editingProduct ? styles.inputDisabled : {}),
-              }}
-              type="number"
-              value={form.stock}
-              onChange={(e) => setForm({ ...form, stock: e.target.value })}
-              placeholder="0"
-              disabled={!!editingProduct}
-            />
-            {editingProduct && (
-              <div style={styles.stockLockedHint}>{t("stockLockedHint")}</div>
-            )}
-          </div>
-          <div style={{ flex: 1 }}>
+            <div style={styles.row}>
+              <div style={{ flex: 1 }}>
+                <label style={styles.label}>{t("categoryLabel")}</label>
+                <input
+                  style={styles.input}
+                  value={form.category}
+                  onChange={(e) =>
+                    setForm({ ...form, category: e.target.value })
+                  }
+                  placeholder={t("categoryPlaceholder")}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={styles.label}>{t("brandLabel")}</label>
+                <input
+                  style={styles.input}
+                  value={form.brand}
+                  onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                  placeholder={t("brandPlaceholder")}
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {step === 1 && (
+          <>
+            <div style={styles.row}>
+              <div style={{ flex: 1 }}>
+                <label style={styles.label}>{t("buyingPriceLabel")}</label>
+                <input
+                  style={styles.input}
+                  type="number"
+                  value={form.buyingPrice}
+                  onChange={(e) =>
+                    setForm({ ...form, buyingPrice: e.target.value })
+                  }
+                  placeholder="0"
+                  autoFocus
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={styles.label}>{t("sellingPriceLabel")}</label>
+                <input
+                  style={styles.input}
+                  type="number"
+                  value={form.sellingPrice}
+                  onChange={(e) =>
+                    setForm({ ...form, sellingPrice: e.target.value })
+                  }
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
             <label style={styles.label}>{t("unitLabel")}</label>
             <div style={styles.unitChipRow}>
               {PRESET_UNITS.map((u) => (
@@ -277,117 +370,122 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
                 autoFocus
               />
             )}
-          </div>
-        </div>
+          </>
+        )}
 
-        <div style={styles.row}>
-          <div style={{ flex: 1 }}>
-            <label style={styles.label}>{t("buyingPriceLabel")}</label>
-            <input
-              style={styles.input}
-              type="number"
-              value={form.buyingPrice}
-              onChange={(e) =>
-                setForm({ ...form, buyingPrice: e.target.value })
-              }
-              placeholder="0"
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label style={styles.label}>{t("sellingPriceLabel")}</label>
-            <input
-              style={styles.input}
-              type="number"
-              value={form.sellingPrice}
-              onChange={(e) =>
-                setForm({ ...form, sellingPrice: e.target.value })
-              }
-              placeholder="0"
-            />
-          </div>
-        </div>
-
-        <label style={styles.label}>{t("expiryDateLabel")}</label>
-        <input
-          style={styles.input}
-          type="date"
-          value={form.expiryDate}
-          onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
-        />
-
-        {!editingProduct && (
+        {step === 2 && (
           <>
-            <label style={styles.label}>{t("supplierOptionalLabel")}</label>
-            <SupplierPicker
-              suppliers={suppliers}
-              selectedSupplierId={form.supplierId || null}
-              onSelect={(id) => setForm({ ...form, supplierId: id || "" })}
-              onSupplierAdded={(newSupplier) => {
-                setSuppliers((prev) => [...prev, newSupplier]);
-                setForm({ ...form, supplierId: newSupplier.id });
+            <label style={styles.label}>{t("stockLabel")}</label>
+            <input
+              style={{
+                ...styles.input,
+                ...(editingProduct ? styles.inputDisabled : {}),
               }}
+              type="number"
+              value={form.stock}
+              onChange={(e) => setForm({ ...form, stock: e.target.value })}
+              placeholder="0"
+              disabled={!!editingProduct}
+              autoFocus={!editingProduct}
             />
-
-            {form.supplierId && (
-              <div style={styles.paymentToggleRow}>
-                <button
-                  style={{
-                    ...styles.paymentToggle,
-                    ...(form.supplierPaymentStatus === "paid"
-                      ? styles.paymentToggleActive
-                      : {}),
-                  }}
-                  onClick={() =>
-                    setForm({ ...form, supplierPaymentStatus: "paid" })
-                  }
-                >
-                  {t("paidNowOption")}
-                </button>
-                <button
-                  style={{
-                    ...styles.paymentToggle,
-                    ...(form.supplierPaymentStatus === "credit"
-                      ? styles.paymentToggleActiveCredit
-                      : {}),
-                  }}
-                  onClick={() =>
-                    setForm({ ...form, supplierPaymentStatus: "credit" })
-                  }
-                >
-                  {t("oweSupplierOption")}
-                </button>
-              </div>
+            {editingProduct && (
+              <div style={styles.stockLockedHint}>{t("stockLockedHint")}</div>
             )}
 
-            {form.supplierId && form.supplierPaymentStatus === "paid" && (
-              <div style={styles.methodRow}>
-                {PAYMENT_METHODS.map((m) => (
-                  <button
-                    key={m.value}
-                    style={{
-                      ...styles.methodChip,
-                      ...(form.supplierPaymentMethod === m.value
-                        ? styles.methodChipActive
-                        : {}),
-                    }}
-                    onClick={() =>
-                      setForm({ ...form, supplierPaymentMethod: m.value })
-                    }
-                  >
-                    {t(m.labelKey)}
-                  </button>
-                ))}
-              </div>
+            <label style={styles.label}>{t("expiryDateLabel")}</label>
+            <input
+              style={styles.input}
+              type="date"
+              value={form.expiryDate}
+              onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
+            />
+
+            {!editingProduct && (
+              <>
+                <label style={styles.label}>{t("supplierOptionalLabel")}</label>
+                <SupplierPicker
+                  suppliers={suppliers}
+                  selectedSupplierId={form.supplierId || null}
+                  onSelect={(id) => setForm({ ...form, supplierId: id || "" })}
+                  onSupplierAdded={(newSupplier) => {
+                    setSuppliers((prev) => [...prev, newSupplier]);
+                    setForm({ ...form, supplierId: newSupplier.id });
+                  }}
+                />
+
+                {form.supplierId && (
+                  <div style={styles.paymentToggleRow}>
+                    <button
+                      style={{
+                        ...styles.paymentToggle,
+                        ...(form.supplierPaymentStatus === "paid"
+                          ? styles.paymentToggleActive
+                          : {}),
+                      }}
+                      onClick={() =>
+                        setForm({ ...form, supplierPaymentStatus: "paid" })
+                      }
+                    >
+                      {t("paidNowOption")}
+                    </button>
+                    <button
+                      style={{
+                        ...styles.paymentToggle,
+                        ...(form.supplierPaymentStatus === "credit"
+                          ? styles.paymentToggleActiveCredit
+                          : {}),
+                      }}
+                      onClick={() =>
+                        setForm({ ...form, supplierPaymentStatus: "credit" })
+                      }
+                    >
+                      {t("oweSupplierOption")}
+                    </button>
+                  </div>
+                )}
+
+                {form.supplierId && form.supplierPaymentStatus === "paid" && (
+                  <div style={styles.methodRow}>
+                    {PAYMENT_METHODS.map((m) => (
+                      <button
+                        key={m.value}
+                        style={{
+                          ...styles.methodChip,
+                          ...(form.supplierPaymentMethod === m.value
+                            ? styles.methodChipActive
+                            : {}),
+                        }}
+                        onClick={() =>
+                          setForm({ ...form, supplierPaymentMethod: m.value })
+                        }
+                      >
+                        {t(m.labelKey)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
 
         <div style={styles.actions}>
-          <button style={styles.cancelBtn} onClick={onClose}>
-            {t("cancelButton")}
+          <button
+            style={styles.cancelBtn}
+            onClick={step === 0 ? onClose : goBack}
+          >
+            {step === 0 ? t("cancelButton") : t("backButton")}
           </button>
-          <button style={styles.saveBtn} disabled={saving} onClick={handleSave}>
-            {saving ? t("completing") : t("saveButton")}
+          <button
+            style={styles.saveBtn}
+            disabled={saving}
+            onClick={isLastStep ? handleSave : goNext}
+          >
+            {saving
+              ? t("completing")
+              : isLastStep
+                ? t("saveButton")
+                : t("continueButton")}
           </button>
         </div>
       </div>
@@ -430,7 +528,36 @@ const styles = {
     maxHeight: "85vh",
     overflow: "auto",
   },
-  title: { fontSize: 18, fontWeight: 800, marginBottom: 18 },
+  title: { fontSize: 18, fontWeight: 800, marginBottom: 16 },
+  stepRow: { display: "flex", alignItems: "center", marginBottom: 8 },
+  stepDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 999,
+    background: "var(--border-muted)",
+    color: "var(--text-muted)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+  stepDotActive: { background: "var(--primary)", color: "white" },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    background: "var(--border-muted)",
+    margin: "0 4px",
+  },
+  stepLineActive: { background: "var(--primary)" },
+  stepIndicatorText: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "var(--text-muted)",
+    textAlign: "center",
+    marginBottom: 18,
+  },
   error: {
     background: "var(--danger-light)",
     color: "var(--danger)",

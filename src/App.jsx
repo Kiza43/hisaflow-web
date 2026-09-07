@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import LoginScreen from "./screens/LoginScreen.jsx";
-import DashboardScreen from "./screens/DashboardScreen.jsx";
+import DashboardScreen from "./screens/Dashboardscreen.jsx";
 import ProductsScreen from "./screens/ProductsScreen.jsx";
 import SalesScreen from "./screens/SalesScreen.jsx";
 import CreditScreen from "./screens/CreditScreen.jsx";
@@ -163,7 +163,9 @@ const App = () => {
     clearSession();
   };
 
-  const handleNavigate = (screenKey) => {
+  const [navigationParams, setNavigationParams] = useState(null);
+
+  const handleNavigate = (screenKey, params = null) => {
     const required = SCREEN_PERMISSIONS[screenKey];
     if (
       required &&
@@ -171,6 +173,7 @@ const App = () => {
       !currentUser?.permissions?.[required]
     )
       return; // silently ignore, nav shouldn't have shown this anyway
+    setNavigationParams(params);
     setActiveScreen(screenKey);
   };
 
@@ -217,7 +220,7 @@ const App = () => {
                   <DashboardScreen onNavigate={handleNavigate} />
                 )}
                 {activeScreen === "products" && canAccess("products") && (
-                  <ProductsScreen />
+                  <ProductsScreen initialFilter={navigationParams} />
                 )}
                 {activeScreen === "sales" && canAccess("sales") && (
                   <SalesScreen />

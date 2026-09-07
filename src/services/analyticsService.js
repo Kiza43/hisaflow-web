@@ -20,15 +20,39 @@ const startOfMonth = () => {
   return d;
 };
 
+const startOfQuarter = () => {
+  const d = startOfToday();
+  const quarterStartMonth = Math.floor(d.getMonth() / 3) * 3;
+  d.setMonth(quarterStartMonth, 1);
+  return d;
+};
+
+const startOfYear = () => {
+  const d = startOfToday();
+  d.setMonth(0, 1);
+  return d;
+};
+
 export const analyticsService = {
   filterSalesByPeriod(sales, period) {
     if (period === "all") return sales;
+    // Previously any period other than 'today'/'week'/'all' silently
+    // fell through to month boundaries — meaning 'quarter' and 'year'
+    // were both quietly computing month-to-date instead. Explicit cases
+    // now, no fallthrough default that could misrepresent an unrecognized
+    // period as something else.
     const boundary =
       period === "today"
         ? startOfToday()
         : period === "week"
           ? startOfWeek()
-          : startOfMonth();
+          : period === "month"
+            ? startOfMonth()
+            : period === "quarter"
+              ? startOfQuarter()
+              : period === "year"
+                ? startOfYear()
+                : startOfToday(); // unrecognized period — narrowest, safest fallback
     return sales.filter((s) => new Date(s.date) >= boundary);
   },
 

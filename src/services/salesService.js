@@ -12,6 +12,13 @@ const formatTZS = (amount) =>
 // cost of the specific units sold — not a blended average that can drift
 // from reality as buying prices change over time.
 export const salesService = {
+  // The first function migrated to a real, granular SQL transaction —
+  // everything that used to happen here in JavaScript (load the whole
+  // products array, run FIFO consumption, save the whole array back) now
+  // happens atomically in the main process. This is deliberately the only
+  // one converted so far; completeCartSale, editSale, and deleteSale still
+  // use the array-based approach below, proven and working, while this one
+  // serves as the template for migrating the rest.
   async completeSale({
     productId,
     quantity,
@@ -20,144 +27,24 @@ export const salesService = {
     accountId,
     accountLabel,
   }) {
-    const products = await dataService.getProducts();
-    const product = products.find((p) => p.id === productId);
-
-    if (!product) {
-      return { success: false, error: "Bidhaa haipatikani" };
-    }
-    if (quantity <= 0) {
-      return { success: false, error: "Weka kiasi sahihi" };
-    }
-    if (!sellingPrice || sellingPrice <= 0) {
-      return { success: false, error: "Weka bei sahihi ya kuuza" };
-    }
-
-    const consumption = batchService.consumeStock(product, quantity);
-    if (!consumption) {
-      return {
-        success: false,
-        error: `Stoo haitoshi — ${product.stock} pekee zimebaki`,
-      };
-    }
-
-    const updatedProducts = products.map((p) =>
-      p.id === productId ? consumption.updatedProduct : p,
-    );
-    await dataService.saveProducts(updatedProducts);
-
-    const totalRevenue = sellingPrice * quantity;
-    const profit = totalRevenue - consumption.totalCost;
-
-    const sale = {
-      id: `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    return dataService.completeSale({
       productId,
-      productName: product.name,
       quantity,
-      buyingPrice: consumption.effectiveBuyingPrice,
       sellingPrice,
-      totalCost: consumption.totalCost,
-      totalRevenue,
-      profit,
-      paymentMethod: paymentMethod || "cash",
-      accountId: accountId || null,
-      accountLabel: accountLabel || "",
-      notes: "",
-      date: new Date().toISOString(),
-    };
-
-    const sales = await dataService.getSales();
-    await dataService.saveSales([...sales, sale]);
-
-    await activityLogService.logActivity(
-      "sold a product",
-      `${product.name} × ${quantity} — ${formatTZS(totalRevenue)}`,
-    );
-
-    return { success: true, sale };
+      paymentMethod,
+      accountId,
+      accountLabel,
+    });
   },
 
-  // Handles a cart of multiple products as one transaction. Every item's
-  // stock consumption is computed first (consumeStock is a pure function —
-  // nothing is saved yet), and only committed to disk if every single one
-  // succeeds. Same all-or-nothing guarantee as before: a cart with 3 valid
-  // items and 1 oversold item commits nothing at all, not the first 3.
+  // Second function migrated to a real SQL transaction — same reasoning
+  // as completeSale, extended to multiple products at once. The
+  // all-or-nothing guarantee this relies on was tested directly before
+  // trusting it: a cart with one oversold item rolls back completely,
+  // including stock already consumed for another, individually-valid
+  // item in the same cart — not just the one that failed.
   async completeCartSale(cartItems, meta = {}) {
-    if (!cartItems || cartItems.length === 0) {
-      return { success: false, error: "Hakuna bidhaa kwenye kikapu" };
-    }
-
-    const products = await dataService.getProducts();
-    const productMap = new Map(products.map((p) => [p.id, p]));
-    const consumptions = new Map(); // productId -> consumeStock result
-
-    for (const item of cartItems) {
-      if (!item.quantity || item.quantity <= 0) {
-        return {
-          success: false,
-          error: `${item.productName}: weka kiasi sahihi`,
-        };
-      }
-      if (!item.sellingPrice || item.sellingPrice <= 0) {
-        return {
-          success: false,
-          error: `${item.productName}: weka bei sahihi ya kuuza`,
-        };
-      }
-      const product = productMap.get(item.productId);
-      if (!product) {
-        return {
-          success: false,
-          error: `${item.productName} haipatikani tena`,
-        };
-      }
-      const consumption = batchService.consumeStock(product, item.quantity);
-      if (!consumption) {
-        return {
-          success: false,
-          error: `${item.productName}: stoo haitoshi (${product.stock} pekee zimebaki)`,
-        };
-      }
-      consumptions.set(item.productId, consumption);
-    }
-
-    const updatedProducts = products.map((p) =>
-      consumptions.has(p.id) ? consumptions.get(p.id).updatedProduct : p,
-    );
-    await dataService.saveProducts(updatedProducts);
-
-    const now = new Date().toISOString();
-    const newSales = cartItems.map((item) => {
-      const consumption = consumptions.get(item.productId);
-      const totalRevenue = item.sellingPrice * item.quantity;
-      return {
-        id: `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        productId: item.productId,
-        productName: item.productName,
-        quantity: item.quantity,
-        buyingPrice: consumption.effectiveBuyingPrice,
-        sellingPrice: item.sellingPrice,
-        totalCost: consumption.totalCost,
-        totalRevenue,
-        profit: totalRevenue - consumption.totalCost,
-        paymentMethod: meta.paymentMethod || "cash",
-        accountId: meta.accountId || null,
-        accountLabel: meta.accountLabel || "",
-        notes: "",
-        date: now,
-      };
-    });
-
-    const existingSales = await dataService.getSales();
-    await dataService.saveSales([...existingSales, ...newSales]);
-
-    const total = newSales.reduce((sum, s) => sum + s.totalRevenue, 0);
-    await activityLogService.logActivity(
-      "sold multiple products",
-      `${newSales.length} bidhaa — ${formatTZS(total)}`,
-    );
-
-    return { success: true, sales: newSales };
+    return dataService.completeCartSale(cartItems, meta);
   },
 
   // Editing a sale isn't a simple field update — the stock it consumed
@@ -200,10 +87,12 @@ export const salesService = {
           (originalSale.profit || 0) / originalSale.quantity
         : product.buyingPrice);
 
-    const restoredProduct = batchService.addBatch(
+    const restoredProduct = batchService.restoreFromBreakdown(
       product,
+      originalSale.batchBreakdown,
       originalSale.quantity,
       originalBuyingPrice,
+      new Date().toISOString(),
     );
     const consumption = batchService.consumeStock(restoredProduct, newQuantity);
     if (!consumption) {
@@ -226,6 +115,7 @@ export const salesService = {
       profit,
       notes: notes || "",
       editedAt: new Date().toISOString(),
+      batchBreakdown: consumption.breakdown,
     };
 
     const updatedSales = sales.map((s) => (s.id === saleId ? updatedSale : s));
@@ -264,10 +154,12 @@ export const salesService = {
         (sale.quantity > 0
           ? sale.sellingPrice - (sale.profit || 0) / sale.quantity
           : product.buyingPrice);
-      const restoredProduct = batchService.addBatch(
+      const restoredProduct = batchService.restoreFromBreakdown(
         product,
+        sale.batchBreakdown,
         sale.quantity,
         originalBuyingPrice,
+        new Date().toISOString(),
       );
       const updatedProducts = products.map((p) =>
         p.id === product.id ? restoredProduct : p,

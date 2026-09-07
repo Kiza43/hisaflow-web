@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { reportService } from "../services/reportService";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
-const PERIODS = ["today", "week", "month", "year", "all"];
+const PERIODS = ["today", "week", "month", "quarter", "year", "all"];
 
 const ReportModal = ({ visible, onClose }) => {
   const { t } = useLanguage();
@@ -16,6 +16,7 @@ const ReportModal = ({ visible, onClose }) => {
     if (p === "today") return t("periodToday");
     if (p === "week") return t("periodThisWeek");
     if (p === "month") return t("periodThisMonth");
+    if (p === "quarter") return t("periodThisQuarter");
     if (p === "year") return t("periodThisYear");
     return t("periodSinceStart");
   };

@@ -13,6 +13,7 @@ import ConfirmModal from "../components/ConfirmModal.jsx";
 import PosterModal from "../components/PosterModal.jsx";
 import NotifyPastBuyersModal from "../components/NotifyPastBuyersModal.jsx";
 import BatchListModal from "../components/BatchListModal.jsx";
+import Pagination from "../components/Pagination.jsx";
 import { useCart } from "../context/CartContext.jsx";
 import { useRestockCart } from "../context/RestockCartContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
@@ -24,7 +25,7 @@ import { sampleDataService } from "../services/sampleDataService";
 import { filterService } from "../services/filterService";
 import { searchService } from "../services/searchService";
 
-const ProductsScreen = () => {
+const ProductsScreen = ({ initialFilter }) => {
   const { t } = useLanguage();
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
@@ -34,8 +35,11 @@ const ProductsScreen = () => {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [brandFilter, setBrandFilter] = useState("all");
   const [stockStatusFilter, setStockStatusFilter] = useState("all"); // all | low-stock | out-of-stock
-  const [sortBy, setSortBy] = useState("name"); // name | price | stock
-  const [sortOrder, setSortOrder] = useState("asc");
+  const [expiryFilter, setExpiryFilter] = useState(
+    initialFilter?.expiryFilter || "all",
+  ); // all | expired
+  const [sortBy, setSortBy] = useState("created"); // created | name | price | stock
+  const [sortOrder, setSortOrder] = useState("desc"); // desc on 'created' means newest first
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -71,16 +75,30 @@ const ProductsScreen = () => {
   };
 
   const handleSaveProduct = async ({ product, supplierLink }) => {
-    const exists = products.some((p) => p.id === product.id);
+    const existingProduct = products.find((p) => p.id === product.id);
+    const exists = !!existingProduct;
+    // Preserve the real creation date on every edit — product here is a
+    // fresh object from the form with no createdAt of its own, so without
+    // this, editing a product would silently reset when it was "created"
+    // to right now, breaking newest-first ordering for anything touched.
+    const productWithCreatedAt = {
+      ...product,
+      createdAt: exists ? existingProduct.createdAt : new Date().toISOString(),
+    };
     // A brand new product with initial stock gets a real first batch,
     // same as restocking does — not just flat stock/buyingPrice fields
     // left for lazy migration to sort out on first touch.
     const finalProduct =
-      !exists && product.stock > 0
+      !exists && productWithCreatedAt.stock > 0
         ? batchService.addBatch(
-            { ...product, stock: 0, buyingPrice: 0, stockBatches: [] },
-            product.stock,
-            product.buyingPrice,
+            {
+              ...productWithCreatedAt,
+              stock: 0,
+              buyingPrice: 0,
+              stockBatches: [],
+            },
+            productWithCreatedAt.stock,
+            productWithCreatedAt.buyingPrice,
             undefined,
             supplierLink
               ? {
@@ -90,7 +108,7 @@ const ProductsScreen = () => {
                 }
               : {},
           )
-        : product;
+        : productWithCreatedAt;
     const updated = exists
       ? products.map((p) => (p.id === product.id ? finalProduct : p))
       : [...products, finalProduct];
@@ -182,6 +200,16 @@ const ProductsScreen = () => {
       stockStatus: stockStatusFilter,
     });
 
+    if (expiryFilter === "expired") {
+      result = result.filter((p) => {
+        if (!p.expiryDate) return false;
+        const days = Math.ceil(
+          (new Date(p.expiryDate) - new Date()) / (1000 * 60 * 60 * 24),
+        );
+        return days < 0;
+      });
+    }
+
     if (showBestSellers) {
       return result
         .filter((p) => quantityByProduct[p.id] > 0)
@@ -198,10 +226,50 @@ const ProductsScreen = () => {
     categoryFilter,
     brandFilter,
     stockStatusFilter,
+    expiryFilter,
     showBestSellers,
     sortBy,
     sortOrder,
   ]);
+
+  const PAGE_SIZE = 24;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(displayedProducts.length / PAGE_SIZE),
+  );
+  const pagedProducts = useMemo(
+    () =>
+      displayedProducts.slice(
+        (currentPage - 1) * PAGE_SIZE,
+        currentPage * PAGE_SIZE,
+      ),
+    [displayedProducts, currentPage],
+  );
+
+  // Resets to page 1 when the person changes what they're looking for —
+  // finishing a sale on page 3 shouldn't yank them back to page 1, but
+  // typing a new search term should, since "page 3" of the old results
+  // means nothing once the results themselves have changed.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchQuery,
+    categoryFilter,
+    brandFilter,
+    stockStatusFilter,
+    expiryFilter,
+    showBestSellers,
+    sortBy,
+    sortOrder,
+  ]);
+
+  // Safety clamp: if products were deleted while on a later page and
+  // that page no longer exists, land on the last real page instead of
+  // showing an empty screen with no way back.
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   if (loading) return null;
 
@@ -283,6 +351,15 @@ const ProductsScreen = () => {
           <option value="out-of-stock">{t("outOfStockOption")}</option>
         </select>
 
+        {expiryFilter === "expired" && (
+          <button
+            style={styles.expiryFilterChip}
+            onClick={() => setExpiryFilter("all")}
+          >
+            {t("expiredOnlyFilterLabel")} ×
+          </button>
+        )}
+
         {!showBestSellers && (
           <>
             <select
@@ -290,6 +367,7 @@ const ProductsScreen = () => {
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
             >
+              <option value="created">{t("sortByNewestOption")}</option>
               <option value="name">{t("sortByNameOption")}</option>
               <option value="price">{t("sortByPriceOption")}</option>
               <option value="stock">{t("sortByStockOption")}</option>
@@ -338,25 +416,32 @@ const ProductsScreen = () => {
           </div>
         </div>
       ) : (
-        <div style={styles.grid}>
-          {displayedProducts.map((p) => (
-            <ProductCard
-              key={p.id}
-              product={p}
-              onEdit={(prod) => {
-                setEditingProduct(prod);
-                setShowForm(true);
-              }}
-              onDelete={handleDelete}
-              onQuickSell={(prod) => setQuickSellProductId(prod.id)}
-              onAddToCart={addToCart}
-              onAddStock={(prod) => setAddStockProduct(prod)}
-              onAddToRestockCart={addToRestockCart}
-              onNotifyPastBuyers={setNotifyBuyersProduct}
-              onViewBatches={setViewingBatchesProduct}
-            />
-          ))}
-        </div>
+        <>
+          <div style={styles.grid}>
+            {pagedProducts.map((p) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                onEdit={(prod) => {
+                  setEditingProduct(prod);
+                  setShowForm(true);
+                }}
+                onDelete={handleDelete}
+                onQuickSell={(prod) => setQuickSellProductId(prod.id)}
+                onAddToCart={addToCart}
+                onAddStock={(prod) => setAddStockProduct(prod)}
+                onAddToRestockCart={addToRestockCart}
+                onNotifyPastBuyers={setNotifyBuyersProduct}
+                onViewBatches={setViewingBatchesProduct}
+              />
+            ))}
+          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </>
       )}
 
       <ProductFormModal
@@ -548,6 +633,15 @@ const styles = {
     background: "var(--surface)",
     color: "var(--text-secondary)",
     fontWeight: 600,
+    fontSize: 12,
+  },
+  expiryFilterChip: {
+    padding: "8px 12px",
+    borderRadius: 10,
+    border: "1.5px solid var(--warning)",
+    background: "var(--warning-light)",
+    color: "var(--warning)",
+    fontWeight: 700,
     fontSize: 12,
   },
   sortOrderBtn: {

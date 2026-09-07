@@ -86,6 +86,10 @@ export const batchService = {
     let remainingToConsume = quantitySold;
     let totalCost = 0;
     const updatedBatches = [];
+    // Which batches were actually touched and how much came from each,
+    // at each one's real price — same reasoning as the SQL side, so a
+    // later restore can recreate exactly what was consumed.
+    const breakdown = [];
 
     for (const batch of sortedBatches) {
       if (remainingToConsume <= 0) {
@@ -95,6 +99,10 @@ export const batchService = {
       const takeFromThisBatch = Math.min(batch.remaining, remainingToConsume);
       totalCost += takeFromThisBatch * batch.buyingPrice;
       remainingToConsume -= takeFromThisBatch;
+      breakdown.push({
+        quantity: takeFromThisBatch,
+        buyingPrice: batch.buyingPrice,
+      });
       const newRemaining = batch.remaining - takeFromThisBatch;
       if (newRemaining > 0)
         updatedBatches.push({ ...batch, remaining: newRemaining });
@@ -111,6 +119,7 @@ export const batchService = {
       },
       totalCost,
       effectiveBuyingPrice: quantitySold > 0 ? totalCost / quantitySold : 0,
+      breakdown,
     };
   },
 
@@ -121,6 +130,40 @@ export const batchService = {
     const migrated = this.migrateProduct(product);
     const newBatch = this.createBatch(quantity, buyingPrice, date, meta);
     const stockBatches = [...migrated.stockBatches, newBatch];
+    const { stock, buyingPrice: avgBuyingPrice } = recalcSummary(stockBatches);
+    return { ...migrated, stockBatches, stock, buyingPrice: avgBuyingPrice };
+  },
+
+  // Restores stock as it actually was consumed, not as one blended
+  // average. If a sale took 10 units from a 500-priced batch and 5 from
+  // a 700-priced batch, deleting that sale should give back two real
+  // batches at those two real prices — not one batch of 15 at ~567,
+  // which silently discards which units came from where. totalQuantity
+  // and fallbackBuyingPrice are only used when breakdown is missing —
+  // sales made before this fix existed never recorded the detail needed
+  // to do better, so those fall back to the old single-averaged-batch
+  // behavior rather than losing the restore entirely.
+  restoreFromBreakdown(
+    product,
+    breakdown,
+    totalQuantity,
+    fallbackBuyingPrice,
+    date,
+  ) {
+    const migrated = this.migrateProduct(product);
+    if (!breakdown || breakdown.length === 0) {
+      return this.addBatch(migrated, totalQuantity, fallbackBuyingPrice, date);
+    }
+    let stockBatches = migrated.stockBatches;
+    for (const entry of breakdown) {
+      if (!entry.quantity || entry.quantity <= 0) continue;
+      const newBatch = this.createBatch(
+        entry.quantity,
+        entry.buyingPrice,
+        date,
+      );
+      stockBatches = [...stockBatches, newBatch];
+    }
     const { stock, buyingPrice: avgBuyingPrice } = recalcSummary(stockBatches);
     return { ...migrated, stockBatches, stock, buyingPrice: avgBuyingPrice };
   },

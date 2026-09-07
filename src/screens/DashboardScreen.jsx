@@ -14,7 +14,7 @@ const formatTZS = (amount) => {
   return "TZS " + Math.round(v).toLocaleString("en-US");
 };
 
-const PERIODS = ["today", "week", "month", "all"];
+const PERIODS = ["today", "week", "month", "quarter", "year", "all"];
 
 const DashboardScreen = ({ onNavigate }) => {
   const { t } = useLanguage();
@@ -46,6 +46,8 @@ const DashboardScreen = ({ onNavigate }) => {
     if (p === "today") return t("periodToday");
     if (p === "week") return t("periodThisWeek");
     if (p === "month") return t("periodThisMonth");
+    if (p === "quarter") return t("periodThisQuarter");
+    if (p === "year") return t("periodThisYear");
     return t("periodAllTime");
   };
 
@@ -58,6 +60,7 @@ const DashboardScreen = ({ onNavigate }) => {
     grossProfit,
     totalExpenses,
     netProfit,
+    transactionCount,
     bestSellers,
     mostProfitable,
     maxSellerQty,
@@ -91,6 +94,7 @@ const DashboardScreen = ({ onNavigate }) => {
       grossProfit: profit,
       totalExpenses: expenses,
       netProfit: profit - expenses,
+      transactionCount: periodSales.length,
       bestSellers: sellers,
       mostProfitable: profitable,
       maxSellerQty: sellers[0]?.quantity || 1,
@@ -120,7 +124,7 @@ const DashboardScreen = ({ onNavigate }) => {
           />
           <ExpiryAlertBanner
             products={products}
-            onPress={() => onNavigate("products")}
+            onPress={() => onNavigate("products", { expiryFilter: "expired" })}
           />
         </>
       )}
@@ -151,7 +155,7 @@ const DashboardScreen = ({ onNavigate }) => {
         </div>
         <div style={styles.statCard}>
           <div style={styles.statLabel}>{t("statSales")}</div>
-          <div style={styles.statValue}>{periodSales.length}</div>
+          <div style={styles.statValue}>{transactionCount}</div>
         </div>
         <div style={styles.statCard}>
           <div style={styles.statLabel}>{t("statRevenue")}</div>

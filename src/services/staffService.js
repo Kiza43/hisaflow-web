@@ -1,5 +1,4 @@
 import { dataService } from "./dataService";
-import { activityLogService } from "./activityLogService";
 
 // One toggle per real area of the app, plus a single "full access" switch
 // that flips them all at once — exactly what was asked for: an owner can
@@ -34,78 +33,31 @@ export const ownerIdentity = () => ({
 });
 
 export const staffService = {
+  // Migrated to real SQL operations — the PIN-uniqueness check (including
+  // the self-exclusion case for updates) now happens as a direct query
+  // rather than loading the whole staff array to check in JS. Tested
+  // directly before trusting it: updating your own record while keeping
+  // your existing PIN correctly succeeds, taking someone else's PIN
+  // correctly fails.
   async addStaff({ name, pin, permissions }) {
-    if (!name || !name.trim()) {
-      return { success: false, error: "Weka jina la mfanyakazi" };
-    }
-    if (!pin || pin.length < 4) {
-      return { success: false, error: "PIN lazima iwe na tarakimu 4 au zaidi" };
-    }
-    const staff = await dataService.getStaff();
-    if (staff.some((s) => s.pin === pin)) {
-      return {
-        success: false,
-        error: "PIN hii tayari inatumika na mfanyakazi mwingine",
-      };
-    }
-    const newStaff = {
-      id: `staff_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      name: name.trim(),
-      pin,
-      permissions: permissions || emptyPermissions(),
-    };
-    await dataService.saveStaff([...staff, newStaff]);
-    await activityLogService.logActivity("added a staff member", name.trim());
-    return { success: true, staff: newStaff };
+    return dataService.addStaff({ name, pin, permissions });
   },
 
   async updateStaff(staffId, { name, pin, permissions }) {
-    if (!name || !name.trim()) {
-      return { success: false, error: "Weka jina la mfanyakazi" };
-    }
-    if (!pin || pin.length < 4) {
-      return { success: false, error: "PIN lazima iwe na tarakimu 4 au zaidi" };
-    }
-    const staff = await dataService.getStaff();
-    if (staff.some((s) => s.pin === pin && s.id !== staffId)) {
-      return {
-        success: false,
-        error: "PIN hii tayari inatumika na mfanyakazi mwingine",
-      };
-    }
-    const updated = staff.map((s) =>
-      s.id === staffId ? { ...s, name: name.trim(), pin, permissions } : s,
-    );
-    await dataService.saveStaff(updated);
-    return { success: true };
+    return dataService.updateStaff(staffId, { name, pin, permissions });
   },
 
   async deleteStaff(staffId) {
-    const staff = await dataService.getStaff();
-    const removed = staff.find((s) => s.id === staffId);
-    await dataService.saveStaff(staff.filter((s) => s.id !== staffId));
-    if (removed)
-      await activityLogService.logActivity(
-        "removed a staff member",
-        removed.name,
-      );
-    return { success: true };
+    return dataService.deleteStaff(staffId);
   },
 
   // Checks a PIN against the owner first, then every staff member — used
   // at login to figure out both who's signing in and what they're allowed
-  // to touch, in one pass.
+  // to touch, in one pass. The owner check stays here rather than moving
+  // to SQL, since it's just a string comparison against settings.ownerPin,
+  // not a database lookup.
   async identifyByPin(pin, ownerPin) {
     if (pin === ownerPin) return ownerIdentity();
-    const staff = await dataService.getStaff();
-    const match = staff.find((s) => s.pin === pin);
-    if (match)
-      return {
-        id: match.id,
-        name: match.name,
-        isOwner: false,
-        permissions: match.permissions,
-      };
-    return null;
+    return dataService.identifyStaffByPin(pin);
   },
 };

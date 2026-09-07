@@ -46,6 +46,10 @@ export const filterService = {
       result.sort((a, b) => (a.sellingPrice || 0) - (b.sellingPrice || 0));
     } else if (filters.sortBy === "stock") {
       result.sort((a, b) => (a.stock || 0) - (b.stock || 0));
+    } else if (filters.sortBy === "created") {
+      result.sort(
+        (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
+      );
     }
 
     if (filters.sortOrder === "desc") {
