@@ -44,6 +44,9 @@ contextBridge.exposeInMainWorld("hisaflow", {
   deleteStaff: (staffId) => ipcRenderer.invoke("staff:deleteStaff", staffId),
   identifyStaffByPin: (pin) => ipcRenderer.invoke("staff:identifyByPin", pin),
 
+  getLicenseStatus: () => ipcRenderer.invoke("license:getStatus"),
+  activateLicense: (key) => ipcRenderer.invoke("license:activate", key),
+
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 
   copyImageToClipboard: (dataUrl) =>

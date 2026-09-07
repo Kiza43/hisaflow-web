@@ -355,6 +355,18 @@ const translations = {
     pageIndicator: "Ukurasa {current} kati ya {total}",
     unexpectedErrorTryAgain:
       "Hitilafu isiyotarajiwa imetokea. Tafadhali jaribu tena.",
+    trialEndedTitle: "Muda wa Majaribio Umeisha",
+    trialEndedSubtitle:
+      "Muda wako wa siku 14 wa kujaribu HisaFlow umeisha. Data yako yote — bidhaa, mauzo, na madeni — imehifadhiwa salama. Wasiliana na FortyScales kupata nambari ya kuanzisha na kuendelea kutumia programu.",
+    yourActivationCodeLabel: "Nambari Yako ya Kifaa",
+    copyCodeButton: "Nakili Nambari",
+    sendCodeHint:
+      "Tuma nambari hii kwa FortyScales kupitia simu au barua pepe ili upewe nambari ya kuanzisha.",
+    licenseKeyLabel: "Nambari ya Kuanzisha",
+    licenseKeyPlaceholder: "XXXX-XXXX-XXXX-XXXX",
+    activateButton: "Anzisha",
+    enterLicenseKeyError: "Weka nambari ya kuanzisha",
+    trialDaysRemainingLabel: "Majaribio: siku {count} zimebaki",
     paymentAccountsSectionTitle: "Akaunti za Malipo",
     paymentAccountsHint:
       "Weka akaunti zako za benki au simu — utaweza kuchagua ni akaunti gani ilipokea malipo kila unapouza",
@@ -758,6 +770,18 @@ const translations = {
     alertNotificationBody: "You have {count} alerts that need attention",
     pageIndicator: "Page {current} of {total}",
     unexpectedErrorTryAgain: "An unexpected error occurred. Please try again.",
+    trialEndedTitle: "Trial Period Ended",
+    trialEndedSubtitle:
+      "Your 14-day trial of HisaFlow has ended. All your data — products, sales, and credit records — is safely stored. Contact FortyScales to get an activation code and continue using the app.",
+    yourActivationCodeLabel: "Your Device Code",
+    copyCodeButton: "Copy Code",
+    sendCodeHint:
+      "Send this code to FortyScales by phone or email to receive your activation code.",
+    licenseKeyLabel: "Activation Code",
+    licenseKeyPlaceholder: "XXXX-XXXX-XXXX-XXXX",
+    activateButton: "Activate",
+    enterLicenseKeyError: "Enter your activation code",
+    trialDaysRemainingLabel: "Trial: {count} days left",
     paymentAccountsSectionTitle: "Payment Accounts",
     paymentAccountsHint:
       "Set up your bank or mobile money accounts — you'll be able to choose which one received payment on every sale",

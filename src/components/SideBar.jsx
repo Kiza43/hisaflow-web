@@ -1,6 +1,7 @@
 import React from "react";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { dataService } from "../services/dataService";
+import TrialBanner from "./TrialBanner.jsx";
 
 // Which permission (if any) each nav item needs — mirrors App.jsx's
 // SCREEN_PERMISSIONS map. A staff member without a given permission
@@ -24,6 +25,7 @@ const Sidebar = ({
   settings,
   currentUser,
   onLogout,
+  licenseStatus,
 }) => {
   const { t, language, setLanguage } = useLanguage();
 
@@ -59,6 +61,9 @@ const Sidebar = ({
     <div style={styles.sidebar}>
       <div style={styles.brand}>
         <div style={styles.brandName}>{businessName || "HisaFlow"}</div>
+        {licenseStatus && !licenseStatus.licensed && (
+          <TrialBanner daysRemaining={licenseStatus.daysRemaining} />
+        )}
       </div>
 
       {currentUser && (

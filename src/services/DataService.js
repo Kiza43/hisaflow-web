@@ -39,6 +39,9 @@ export const dataService = {
   deleteStaff: (staffId) => window.hisaflow.deleteStaff(staffId),
   identifyStaffByPin: (pin) => window.hisaflow.identifyStaffByPin(pin),
 
+  getLicenseStatus: () => window.hisaflow.getLicenseStatus(),
+  activateLicense: (key) => window.hisaflow.activateLicense(key),
+
   getSettings: () => window.hisaflow.getSettings(),
   saveSettings: (settings) => window.hisaflow.saveSettings(settings),
 };

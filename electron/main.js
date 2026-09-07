@@ -8,6 +8,7 @@ const {
 } = require("electron");
 const path = require("path");
 const queries = require("./queries");
+const license = require("./license");
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -107,6 +108,11 @@ ipcMain.handle("staff:deleteStaff", (event, staffId) =>
 );
 ipcMain.handle("staff:identifyByPin", (event, pin) =>
   queries.identifyStaffByPin(pin),
+);
+
+ipcMain.handle("license:getStatus", () => license.getLicenseStatus());
+ipcMain.handle("license:activate", (event, key) =>
+  license.activateLicense(key),
 );
 
 // Opens a URL in the user's actual default browser (or, for wa.me links,

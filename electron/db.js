@@ -180,6 +180,17 @@ function initSchema() {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       data TEXT NOT NULL
     );
+    -- Deliberately its own table, not folded into settings — settings
+    -- gets exported and re-imported through the normal backup/restore
+    -- flow, and license state should never be touched by that. A trial
+    -- reset via "restore a backup" would defeat the entire point of this.
+    CREATE TABLE IF NOT EXISTS license (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      machine_id TEXT NOT NULL,
+      install_date TEXT NOT NULL,
+      licensed INTEGER NOT NULL DEFAULT 0,
+      license_key TEXT
+    );
   `);
 }
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import LoginScreen from "./screens/LoginScreen.jsx";
+import TrialLockScreen from "./screens/TrialLockScreen.jsx";
 import DashboardScreen from "./screens/Dashboardscreen.jsx";
 import ProductsScreen from "./screens/ProductsScreen.jsx";
 import SalesScreen from "./screens/SalesScreen.jsx";
@@ -86,6 +87,7 @@ const App = () => {
     existingSession?.activeScreen || "dashboard",
   );
   const [initialLanguage, setInitialLanguage] = useState(null);
+  const [licenseStatus, setLicenseStatus] = useState(null);
   const backupPendingRef = useRef(false);
 
   useEffect(() => {
@@ -96,6 +98,9 @@ const App = () => {
     dataService
       .getSettings()
       .then((s) => setInitialLanguage(s.language || "sw"));
+    // Checked before anything else — a trial lock has to block the login
+    // screen too, not just the screens behind it.
+    dataService.getLicenseStatus().then(setLicenseStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -183,7 +188,20 @@ const App = () => {
     return currentUser?.isOwner || !!currentUser?.permissions?.[required];
   };
 
-  if (initialLanguage === null) return null; // brief, avoids a language flash
+  if (initialLanguage === null || licenseStatus === null) return null; // brief, avoids a language/lock flash
+
+  if (licenseStatus.trialExpired) {
+    return (
+      <LanguageProvider initialLanguage={initialLanguage}>
+        <TrialLockScreen
+          machineId={licenseStatus.machineId}
+          onActivated={() =>
+            dataService.getLicenseStatus().then(setLicenseStatus)
+          }
+        />
+      </LanguageProvider>
+    );
+  }
 
   return (
     <LanguageProvider initialLanguage={initialLanguage}>
@@ -206,6 +224,7 @@ const App = () => {
                 settings={settings}
                 currentUser={currentUser}
                 onLogout={handleLogout}
+                licenseStatus={licenseStatus}
               />
               <div
                 key={activeScreen}
