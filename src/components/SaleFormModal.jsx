@@ -3,6 +3,7 @@ import { salesService } from "../services/salesService";
 import { creditService } from "../services/creditService";
 import { dataService } from "../services/dataService";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { blockInvalidNumberKeys } from "../utils/numberInput";
 
 const formatTZS = (amount) => {
   const v = typeof amount === "number" && !isNaN(amount) ? amount : 0;
@@ -12,6 +13,17 @@ const formatTZS = (amount) => {
 // Handles completion internally now (cash or credit), same pattern as
 // CartModal — a single-product sale should be able to go on credit just
 // as easily as a cart of several, not a capability only the cart gets.
+// Always available, no setup required — matches the same generic
+// cash/bank/Lipa Namba pattern already used for restocking. Specifically
+// named accounts (configured in Settings) appear as additional, more
+// precise options after these, for shops that want to track exactly
+// which bank account received the money.
+const GENERIC_METHODS = [
+  { value: "cash", labelKey: "cashMethodOption" },
+  { value: "bank_transfer", labelKey: "bankTransferMethodOption" },
+  { value: "lipa_namba", labelKey: "lipaNambaMethodOption" },
+];
+
 const SaleFormModal = ({
   visible,
   products,
@@ -28,6 +40,8 @@ const SaleFormModal = ({
   const [receivedVia, setReceivedVia] = useState("cash"); // 'cash' or an account id
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [receiptPhone, setReceiptPhone] = useState("");
+  const [receiptName, setReceiptName] = useState("");
   const [error, setError] = useState("");
   const [completing, setCompleting] = useState(false);
 
@@ -96,7 +110,7 @@ const SaleFormModal = ({
         paymentMode === "cash"
           ? selectedAccount
             ? selectedAccount.type
-            : "cash"
+            : receivedVia
           : "";
       const accountId =
         paymentMode === "cash" ? selectedAccount?.id || null : null;
@@ -117,6 +131,8 @@ const SaleFormModal = ({
               paymentMethod,
               accountId,
               accountLabel,
+              customerPhone: receiptPhone.trim() || undefined,
+              customerName: receiptName.trim() || undefined,
             });
 
       if (!result.success) {
@@ -159,6 +175,8 @@ const SaleFormModal = ({
     setReceivedVia("cash");
     setCustomerName("");
     setCustomerPhone("");
+    setReceiptPhone("");
+    setReceiptName("");
     setError("");
     onClose();
   };
@@ -194,6 +212,7 @@ const SaleFormModal = ({
               type="number"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
+              onKeyDown={blockInvalidNumberKeys}
             />
           </div>
           <div style={{ flex: 1 }}>
@@ -203,6 +222,7 @@ const SaleFormModal = ({
               type="number"
               value={sellingPrice}
               onChange={(e) => setSellingPrice(e.target.value)}
+              onKeyDown={blockInvalidNumberKeys}
             />
           </div>
         </div>
@@ -228,19 +248,24 @@ const SaleFormModal = ({
           </button>
         </div>
 
-        {paymentMode === "cash" && paymentAccounts.length > 0 && (
+        {paymentMode === "cash" && (
           <>
             <label style={styles.label}>{t("receivedViaLabel")}</label>
             <div style={styles.accountChipRow}>
-              <button
-                style={{
-                  ...styles.accountChip,
-                  ...(receivedVia === "cash" ? styles.accountChipActive : {}),
-                }}
-                onClick={() => setReceivedVia("cash")}
-              >
-                {t("cashMethodOption")}
-              </button>
+              {GENERIC_METHODS.map((m) => (
+                <button
+                  key={m.value}
+                  style={{
+                    ...styles.accountChip,
+                    ...(receivedVia === m.value
+                      ? styles.accountChipActive
+                      : {}),
+                  }}
+                  onClick={() => setReceivedVia(m.value)}
+                >
+                  {t(m.labelKey)}
+                </button>
+              ))}
               {paymentAccounts.map((acc) => (
                 <button
                   key={acc.id}
@@ -254,7 +279,27 @@ const SaleFormModal = ({
                 </button>
               ))}
             </div>
+            {paymentAccounts.length === 0 && (
+              <div style={styles.accountHint}>{t("noPaymentAccountsHint")}</div>
+            )}
           </>
+        )}
+
+        {paymentMode === "cash" && (
+          <div style={styles.customerFields}>
+            <input
+              style={styles.input}
+              value={receiptName}
+              onChange={(e) => setReceiptName(e.target.value)}
+              placeholder={t("receiptNamePlaceholder")}
+            />
+            <input
+              style={styles.input}
+              value={receiptPhone}
+              onChange={(e) => setReceiptPhone(e.target.value)}
+              placeholder={t("receiptPhonePlaceholder")}
+            />
+          </div>
         )}
 
         {paymentMode === "credit" && (
@@ -395,6 +440,12 @@ const styles = {
     display: "flex",
     flexWrap: "wrap",
     gap: 6,
+    marginBottom: 14,
+  },
+  accountHint: {
+    fontSize: 11,
+    color: "var(--text-muted)",
+    marginTop: -8,
     marginBottom: 14,
   },
   accountChip: {

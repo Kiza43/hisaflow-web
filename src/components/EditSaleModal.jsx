@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { salesService } from "../services/salesService";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { blockInvalidNumberKeys } from "../utils/numberInput";
 
 const formatTZS = (amount) => {
   const v = typeof amount === "number" && !isNaN(amount) ? amount : 0;
@@ -85,6 +86,7 @@ const EditSaleModal = ({ visible, sale, onSaved, onClose }) => {
           type="number"
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
+          onKeyDown={blockInvalidNumberKeys}
         />
 
         <label style={styles.label}>{t("sellingPriceLabel")}</label>
@@ -93,6 +95,7 @@ const EditSaleModal = ({ visible, sale, onSaved, onClose }) => {
           type="number"
           value={sellingPrice}
           onChange={(e) => setSellingPrice(e.target.value)}
+          onKeyDown={blockInvalidNumberKeys}
         />
 
         <label style={styles.label}>{t("additionalNotesLabel")}</label>

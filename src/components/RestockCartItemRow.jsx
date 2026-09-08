@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { blockInvalidNumberKeys } from "../utils/numberInput";
 
 const formatTZS = (amount) => {
   const v = typeof amount === "number" && !isNaN(amount) ? amount : 0;
@@ -68,6 +69,7 @@ const RestockCartItemRow = ({
             onChange={(e) => setQtyInput(e.target.value)}
             onBlur={commitQuantity}
             onKeyDown={(e) => {
+              blockInvalidNumberKeys(e);
               if (e.key === "Enter") e.target.blur();
             }}
           />
@@ -81,6 +83,7 @@ const RestockCartItemRow = ({
             onChange={(e) => setPriceInput(e.target.value)}
             onBlur={commitPrice}
             onKeyDown={(e) => {
+              blockInvalidNumberKeys(e);
               if (e.key === "Enter") e.target.blur();
             }}
           />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { blockInvalidNumberKeys } from "../utils/numberInput";
 
 const formatTZS = (amount) => {
   const v = typeof amount === "number" && !isNaN(amount) ? amount : 0;
@@ -59,6 +60,7 @@ const CartItemRow = ({ item, onUpdateQuantity, onRemove }) => {
             onChange={(e) => setQtyInput(e.target.value)}
             onBlur={commitQuantity}
             onKeyDown={(e) => {
+              blockInvalidNumberKeys(e);
               if (e.key === "Enter") e.target.blur();
             }}
           />

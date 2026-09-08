@@ -11,6 +11,16 @@ const formatTZS = (amount) => {
   return "TZS " + Math.round(v).toLocaleString("en-US");
 };
 
+// Always available, no setup required — matches the same generic
+// cash/bank/Lipa Namba pattern already used for restocking. Specifically
+// named accounts (configured in Settings) appear as additional, more
+// precise options after these.
+const GENERIC_METHODS = [
+  { value: "cash", labelKey: "cashMethodOption" },
+  { value: "bank_transfer", labelKey: "bankTransferMethodOption" },
+  { value: "lipa_namba", labelKey: "lipaNambaMethodOption" },
+];
+
 const CartModal = ({ visible, onClose, onCompleted }) => {
   const { items, updateQuantity, removeFromCart, clearCart, totalAmount } =
     useCart();
@@ -22,6 +32,8 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
   const [receivedVia, setReceivedVia] = useState("cash");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [receiptPhone, setReceiptPhone] = useState("");
+  const [receiptName, setReceiptName] = useState("");
 
   useEffect(() => {
     if (visible)
@@ -42,7 +54,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
         paymentMode === "cash"
           ? selectedAccount
             ? selectedAccount.type
-            : "cash"
+            : receivedVia
           : "";
       const accountId =
         paymentMode === "cash" ? selectedAccount?.id || null : null;
@@ -60,6 +72,8 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
               paymentMethod,
               accountId,
               accountLabel,
+              customerPhone: receiptPhone.trim() || undefined,
+              customerName: receiptName.trim() || undefined,
             });
 
       if (!result.success) {
@@ -85,6 +99,8 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
       clearCart();
       setCustomerName("");
       setCustomerPhone("");
+      setReceiptPhone("");
+      setReceiptName("");
       setPaymentMode("cash");
       setReceivedVia("cash");
       onCompleted(saleData);
@@ -148,31 +164,60 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
               </button>
             </div>
 
-            {paymentMode === "cash" && paymentAccounts.length > 0 && (
-              <div style={styles.accountChipRow}>
-                <button
-                  style={{
-                    ...styles.accountChip,
-                    ...(receivedVia === "cash" ? styles.accountChipActive : {}),
-                  }}
-                  onClick={() => setReceivedVia("cash")}
-                >
-                  {t("cashMethodOption")}
-                </button>
-                {paymentAccounts.map((acc) => (
-                  <button
-                    key={acc.id}
-                    style={{
-                      ...styles.accountChip,
-                      ...(receivedVia === acc.id
-                        ? styles.accountChipActive
-                        : {}),
-                    }}
-                    onClick={() => setReceivedVia(acc.id)}
-                  >
-                    {acc.label}
-                  </button>
-                ))}
+            {paymentMode === "cash" && (
+              <>
+                <div style={styles.accountChipRow}>
+                  {GENERIC_METHODS.map((m) => (
+                    <button
+                      key={m.value}
+                      style={{
+                        ...styles.accountChip,
+                        ...(receivedVia === m.value
+                          ? styles.accountChipActive
+                          : {}),
+                      }}
+                      onClick={() => setReceivedVia(m.value)}
+                    >
+                      {t(m.labelKey)}
+                    </button>
+                  ))}
+                  {paymentAccounts.map((acc) => (
+                    <button
+                      key={acc.id}
+                      style={{
+                        ...styles.accountChip,
+                        ...(receivedVia === acc.id
+                          ? styles.accountChipActive
+                          : {}),
+                      }}
+                      onClick={() => setReceivedVia(acc.id)}
+                    >
+                      {acc.label}
+                    </button>
+                  ))}
+                </div>
+                {paymentAccounts.length === 0 && (
+                  <div style={styles.accountHint}>
+                    {t("noPaymentAccountsHint")}
+                  </div>
+                )}
+              </>
+            )}
+
+            {paymentMode === "cash" && (
+              <div style={styles.customerFields}>
+                <input
+                  style={styles.customerInput}
+                  value={receiptName}
+                  onChange={(e) => setReceiptName(e.target.value)}
+                  placeholder={t("receiptNamePlaceholder")}
+                />
+                <input
+                  style={styles.customerInput}
+                  value={receiptPhone}
+                  onChange={(e) => setReceiptPhone(e.target.value)}
+                  placeholder={t("receiptPhonePlaceholder")}
+                />
               </div>
             )}
 
@@ -311,6 +356,12 @@ const styles = {
     display: "flex",
     flexWrap: "wrap",
     gap: 6,
+    marginBottom: 14,
+  },
+  accountHint: {
+    fontSize: 11,
+    color: "var(--text-muted)",
+    marginTop: -8,
     marginBottom: 14,
   },
   accountChip: {

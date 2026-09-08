@@ -77,7 +77,9 @@ function initSchema() {
       notes TEXT,
       date TEXT NOT NULL,
       edited_at TEXT,
-      batch_breakdown TEXT
+      batch_breakdown TEXT,
+      customer_phone TEXT,
+      customer_name TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date);
     CREATE INDEX IF NOT EXISTS idx_sales_product ON sales(product_id);
@@ -211,6 +213,8 @@ function addColumnIfMissing(table, column, definition) {
 addColumnIfMissing("sales", "batch_breakdown", "TEXT");
 addColumnIfMissing("credit_sale_items", "batch_breakdown", "TEXT");
 addColumnIfMissing("products", "created_at", "TEXT");
+addColumnIfMissing("sales", "customer_phone", "TEXT");
+addColumnIfMissing("sales", "customer_name", "TEXT");
 
 // Existing products from before this fix have no created_at recorded.
 // Backfilling with each product's earliest stock batch date is a

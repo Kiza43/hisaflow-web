@@ -44,6 +44,37 @@ contextBridge.exposeInMainWorld("hisaflow", {
   deleteStaff: (staffId) => ipcRenderer.invoke("staff:deleteStaff", staffId),
   identifyStaffByPin: (pin) => ipcRenderer.invoke("staff:identifyByPin", pin),
 
+  addSupplier: (args) => ipcRenderer.invoke("suppliers:addSupplier", args),
+  deleteSupplier: (supplierId) =>
+    ipcRenderer.invoke("suppliers:deleteSupplier", supplierId),
+  recordSupply: (supplierId, amount) =>
+    ipcRenderer.invoke("suppliers:recordSupply", supplierId, amount),
+  recordSupplierPayment: (supplierId, amount, paymentMethod) =>
+    ipcRenderer.invoke(
+      "suppliers:recordPayment",
+      supplierId,
+      amount,
+      paymentMethod,
+    ),
+
+  addStock: (args) => ipcRenderer.invoke("restock:addStock", args),
+  completeRestockCart: (cartItems, meta) =>
+    ipcRenderer.invoke("restock:completeRestockCart", cartItems, meta),
+
+  editSale: (saleId, args) =>
+    ipcRenderer.invoke("sales:editSale", saleId, args),
+  deleteSale: (saleId) => ipcRenderer.invoke("sales:deleteSale", saleId),
+
+  recordCreditPayment: (creditSaleId, amount, paymentMethod) =>
+    ipcRenderer.invoke(
+      "credit:recordPayment",
+      creditSaleId,
+      amount,
+      paymentMethod,
+    ),
+  deleteCreditSale: (creditSaleId) =>
+    ipcRenderer.invoke("credit:deleteCreditSale", creditSaleId),
+
   getLicenseStatus: () => ipcRenderer.invoke("license:getStatus"),
   activateLicense: (key) => ipcRenderer.invoke("license:activate", key),
 

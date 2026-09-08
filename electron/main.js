@@ -110,6 +110,42 @@ ipcMain.handle("staff:identifyByPin", (event, pin) =>
   queries.identifyStaffByPin(pin),
 );
 
+ipcMain.handle("suppliers:addSupplier", (event, args) =>
+  queries.addSupplier(args),
+);
+ipcMain.handle("suppliers:deleteSupplier", (event, supplierId) =>
+  queries.deleteSupplier(supplierId),
+);
+ipcMain.handle("suppliers:recordSupply", (event, supplierId, amount) =>
+  queries.recordSupply(supplierId, amount),
+);
+ipcMain.handle(
+  "suppliers:recordPayment",
+  (event, supplierId, amount, paymentMethod) =>
+    queries.recordSupplierPayment(supplierId, amount, paymentMethod),
+);
+
+ipcMain.handle("restock:addStock", (event, args) => queries.addStock(args));
+ipcMain.handle("restock:completeRestockCart", (event, cartItems, meta) =>
+  queries.completeRestockCart(cartItems, meta),
+);
+
+ipcMain.handle("sales:editSale", (event, saleId, args) =>
+  queries.editSale(saleId, args),
+);
+ipcMain.handle("sales:deleteSale", (event, saleId) =>
+  queries.deleteSale(saleId),
+);
+
+ipcMain.handle(
+  "credit:recordPayment",
+  (event, creditSaleId, amount, paymentMethod) =>
+    queries.recordCreditPayment(creditSaleId, amount, paymentMethod),
+);
+ipcMain.handle("credit:deleteCreditSale", (event, creditSaleId) =>
+  queries.deleteCreditSale(creditSaleId),
+);
+
 ipcMain.handle("license:getStatus", () => license.getLicenseStatus());
 ipcMain.handle("license:activate", (event, key) =>
   license.activateLicense(key),

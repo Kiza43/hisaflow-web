@@ -118,14 +118,16 @@ function getSales() {
       // null here, and the restoration logic falls back to the averaged
       // buyingPrice for those, same as it always did.
       batchBreakdown: s.batch_breakdown ? JSON.parse(s.batch_breakdown) : null,
+      customerPhone: s.customer_phone,
+      customerName: s.customer_name,
     }));
 }
 
 const saveSales = db.transaction((sales) => {
   db.prepare("DELETE FROM sales").run();
   const insert = db.prepare(`
-    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, edited_at, batch_breakdown)
-    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @editedAt, @breakdownJson)
+    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, edited_at, batch_breakdown, customer_phone, customer_name)
+    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @editedAt, @breakdownJson, @customerPhone, @customerName)
   `);
   for (const s of sales) {
     insert.run({
@@ -145,6 +147,8 @@ const saveSales = db.transaction((sales) => {
       date: s.date,
       editedAt: s.editedAt ?? null,
       breakdownJson: s.batchBreakdown ? JSON.stringify(s.batchBreakdown) : null,
+      customerPhone: s.customerPhone ?? null,
+      customerName: s.customerName ?? null,
     });
   }
 });
@@ -441,6 +445,616 @@ function identifyStaffByPin(pin) {
   };
 }
 
+// Granular supplier operations. recordPayment's "can't pay more than
+// owed" check reads the current balance and writes the update in the
+// same transaction — the array-based version read the whole suppliers
+// list, checked in JS, then saved back separately, leaving a real gap
+// where two concurrent payments could each pass the check against the
+// same stale balance and together overpay past what was actually owed.
+function addSupplier({ name, phone }) {
+  if (!name || !name.trim())
+    return { success: false, error: "Weka jina la msambazaji" };
+  const id = genId("sup");
+  db.prepare(
+    "INSERT INTO suppliers (id, name, phone, total_supplied, total_paid) VALUES (?, ?, ?, 0, 0)",
+  ).run(id, name.trim(), (phone || "").trim());
+  return {
+    success: true,
+    supplier: {
+      id,
+      name: name.trim(),
+      phone: (phone || "").trim(),
+      totalSupplied: 0,
+      totalPaid: 0,
+      payments: [],
+    },
+  };
+}
+
+function deleteSupplier(supplierId) {
+  db.prepare("DELETE FROM suppliers WHERE id = ?").run(supplierId); // cascades to supplier_payments
+  return { success: true };
+}
+
+function recordSupply(supplierId, amount) {
+  db.prepare(
+    "UPDATE suppliers SET total_supplied = total_supplied + ? WHERE id = ?",
+  ).run(amount, supplierId);
+  return { success: true };
+}
+
+const recordSupplierPaymentTx = db.transaction(
+  (supplierId, amount, paymentMethod) => {
+    const supplier = db
+      .prepare("SELECT * FROM suppliers WHERE id = ?")
+      .get(supplierId);
+    if (!supplier) throw new CartValidationError("Msambazaji hapatikani");
+
+    const owed = supplier.total_supplied - supplier.total_paid;
+    if (amount > owed)
+      throw new CartValidationError(
+        `Kiasi kinazidi deni lililobaki (${Math.round(owed)})`,
+      );
+
+    db.prepare(
+      "UPDATE suppliers SET total_paid = total_paid + ? WHERE id = ?",
+    ).run(amount, supplierId);
+    const date = new Date().toISOString();
+    db.prepare(
+      "INSERT INTO supplier_payments (id, supplier_id, amount, payment_method, date) VALUES (?, ?, ?, ?, ?)",
+    ).run(genId("sp"), supplierId, amount, paymentMethod || "", date);
+    db.prepare(
+      `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'paid a supplier', ?, NULL, ?)`,
+    ).run(
+      genId("al"),
+      `${supplier.name} — TZS ${Math.round(amount).toLocaleString("en-US")}`,
+      date,
+    );
+  },
+);
+
+function recordSupplierPayment(supplierId, amount, paymentMethod) {
+  if (!amount || amount <= 0)
+    return { success: false, error: "Weka kiasi sahihi" };
+  try {
+    recordSupplierPaymentTx(supplierId, amount, paymentMethod);
+    return { success: true };
+  } catch (err) {
+    if (err instanceof CartValidationError)
+      return { success: false, error: err.message };
+    throw err;
+  }
+}
+
+// Restocking creates a genuinely new batch row rather than blending into
+// one running average — same reasoning as the old batchService.addBatch,
+// now as real SQL. This is what lets a later sale know the real,
+// specific cost of the units it consumes (FIFO), not an average that
+// drifts from reality as prices change over time.
+function recomputeProductSummary(productId) {
+  const batches = db
+    .prepare("SELECT * FROM stock_batches WHERE product_id = ?")
+    .all(productId);
+  const newStock = batches.reduce((sum, b) => sum + b.remaining, 0);
+  const totalValue = batches.reduce(
+    (sum, b) => sum + b.remaining * b.buying_price,
+    0,
+  );
+  const newBuyingPrice = newStock > 0 ? totalValue / newStock : 0;
+  db.prepare(
+    "UPDATE products SET stock = ?, buying_price = ? WHERE id = ?",
+  ).run(newStock, newBuyingPrice, productId);
+}
+
+const addStockTx = db.transaction(
+  (
+    productId,
+    quantity,
+    buyingPrice,
+    supplierId,
+    supplierName,
+    paymentMethod,
+  ) => {
+    const product = db
+      .prepare("SELECT * FROM products WHERE id = ?")
+      .get(productId);
+    if (!product) throw new CartValidationError("Bidhaa haipatikani");
+
+    const date = new Date().toISOString();
+    db.prepare(
+      `
+    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+    ).run(
+      genId("b"),
+      productId,
+      quantity,
+      quantity,
+      buyingPrice,
+      date,
+      supplierId || null,
+      supplierName || null,
+      paymentMethod || null,
+    );
+
+    recomputeProductSummary(productId);
+
+    db.prepare(
+      `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'added stock', ?, NULL, ?)`,
+    ).run(
+      genId("al"),
+      `${product.name} +${quantity} @ TZS ${Math.round(buyingPrice).toLocaleString("en-US")}`,
+      date,
+    );
+  },
+);
+
+function addStock({
+  productId,
+  quantity,
+  buyingPrice,
+  supplierId,
+  supplierName,
+  paymentMethod,
+}) {
+  if (!quantity || quantity <= 0)
+    return { success: false, error: "Weka kiasi sahihi" };
+  if (buyingPrice < 0)
+    return { success: false, error: "Bei ya kununua haiwezi kuwa hasi" };
+  try {
+    addStockTx(
+      productId,
+      quantity,
+      buyingPrice,
+      supplierId,
+      supplierName,
+      paymentMethod,
+    );
+    return { success: true };
+  } catch (err) {
+    if (err instanceof CartValidationError)
+      return { success: false, error: err.message };
+    throw err;
+  }
+}
+
+// Same all-or-nothing guarantee as a cash cart sale — a restock order
+// covering several products is one business event (one delivery, one
+// supplier trip), so it should commit completely or not at all. Tested
+// directly: one valid product alongside one with a negative price
+// correctly rolls back the valid one too, leaving stock exactly as it
+// was before the attempt.
+const completeRestockCartTx = db.transaction((cartItems, meta) => {
+  for (const item of cartItems) {
+    if (!item.quantity || item.quantity <= 0) {
+      throw new CartValidationError(`${item.productName}: weka kiasi sahihi`);
+    }
+    if (item.buyingPrice < 0) {
+      throw new CartValidationError(
+        `${item.productName}: bei ya kununua haiwezi kuwa hasi`,
+      );
+    }
+  }
+
+  const date = new Date().toISOString();
+  const insertBatch = db.prepare(`
+    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const item of cartItems) {
+    insertBatch.run(
+      genId("b"),
+      item.productId,
+      item.quantity,
+      item.quantity,
+      item.buyingPrice,
+      date,
+      meta.supplierId || null,
+      meta.supplierName || null,
+      meta.paymentMethod || null,
+    );
+    recomputeProductSummary(item.productId);
+  }
+
+  db.prepare(
+    `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'restocked multiple products', ?, NULL, ?)`,
+  ).run(genId("al"), `${cartItems.length} bidhaa`, date);
+});
+
+function completeRestockCart(cartItems, meta = {}) {
+  if (!cartItems || cartItems.length === 0) {
+    return { success: false, error: "Hakuna bidhaa kwenye kikapu" };
+  }
+  try {
+    completeRestockCartTx(cartItems, meta);
+    return { success: true };
+  } catch (err) {
+    if (err instanceof CartValidationError)
+      return { success: false, error: err.message };
+    throw err;
+  }
+}
+
+// Recreates stock exactly as it was actually consumed — one real batch
+// per breakdown entry at its real price — rather than one batch blended
+// to an average. Falls back to a single averaged batch only for sales
+// made before batch_breakdown existed, since those never recorded the
+// detail needed to do better.
+function restoreBatchesFromBreakdown(
+  productId,
+  breakdown,
+  totalQuantity,
+  fallbackBuyingPrice,
+  date,
+) {
+  const insertBatch = db.prepare(`
+    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  if (breakdown && breakdown.length > 0) {
+    for (const entry of breakdown) {
+      if (entry.quantity > 0)
+        insertBatch.run(
+          genId("b"),
+          productId,
+          entry.quantity,
+          entry.quantity,
+          entry.buyingPrice,
+          date,
+        );
+    }
+  } else {
+    insertBatch.run(
+      genId("b"),
+      productId,
+      totalQuantity,
+      totalQuantity,
+      fallbackBuyingPrice,
+      date,
+    );
+  }
+  recomputeProductSummary(productId);
+}
+
+// FIFO consumption as its own reusable piece — same logic completeSaleTx
+// uses, extracted here so editSale's "re-consume after restoring" step
+// doesn't duplicate it. Throws on insufficient stock so the caller's
+// transaction rolls back the restore too, not just the failed
+// consumption — an edit either fully succeeds or nothing changes at all.
+function consumeStockForEdit(productId, quantity) {
+  const batches = db
+    .prepare(
+      "SELECT * FROM stock_batches WHERE product_id = ? ORDER BY date ASC",
+    )
+    .all(productId);
+  const totalAvailable = batches.reduce((sum, b) => sum + b.remaining, 0);
+  if (quantity > totalAvailable)
+    throw new CartValidationError("INSUFFICIENT_STOCK");
+
+  let remainingToConsume = quantity;
+  let totalCost = 0;
+  const breakdown = [];
+  const updateBatch = db.prepare(
+    "UPDATE stock_batches SET remaining = ? WHERE id = ?",
+  );
+  const deleteBatch = db.prepare("DELETE FROM stock_batches WHERE id = ?");
+
+  for (const batch of batches) {
+    if (remainingToConsume <= 0) break;
+    const take = Math.min(batch.remaining, remainingToConsume);
+    totalCost += take * batch.buying_price;
+    remainingToConsume -= take;
+    breakdown.push({ quantity: take, buyingPrice: batch.buying_price });
+    const newRemaining = batch.remaining - take;
+    if (newRemaining > 0) updateBatch.run(newRemaining, batch.id);
+    else deleteBatch.run(batch.id);
+  }
+
+  recomputeProductSummary(productId);
+  return { totalCost, breakdown, effectiveBuyingPrice: totalCost / quantity };
+}
+
+// Editing a sale isn't a field update — the stock it consumed already
+// left the shelf. The correct sequence: restore what the ORIGINAL sale
+// took (as real batches, at their real prices), then re-consume for the
+// NEW quantity from that restored state. Both steps run in one
+// transaction — tested directly that editing to an impossible quantity
+// rolls back the restore too, not just the failed re-consumption,
+// leaving stock exactly as it was before the edit was attempted.
+const editSaleTx = db.transaction(
+  (saleId, newQuantity, newSellingPrice, notes) => {
+    const sale = db.prepare("SELECT * FROM sales WHERE id = ?").get(saleId);
+    if (!sale) throw new CartValidationError("SALE_NOT_FOUND");
+
+    const product = db
+      .prepare("SELECT * FROM products WHERE id = ?")
+      .get(sale.product_id);
+    if (!product) throw new CartValidationError("PRODUCT_NOT_FOUND");
+
+    // Legacy sales recorded before buying_price was tracked won't have
+    // one stored — derive a reasonable one from what's already on the
+    // record rather than losing the restore entirely.
+    const originalBuyingPrice =
+      sale.buying_price ??
+      (sale.quantity > 0
+        ? sale.selling_price - (sale.profit || 0) / sale.quantity
+        : product.buying_price);
+    const breakdown = sale.batch_breakdown
+      ? JSON.parse(sale.batch_breakdown)
+      : null;
+    const restoreDate = new Date().toISOString();
+
+    restoreBatchesFromBreakdown(
+      sale.product_id,
+      breakdown,
+      sale.quantity,
+      originalBuyingPrice,
+      restoreDate,
+    );
+
+    let consumption;
+    try {
+      consumption = consumeStockForEdit(sale.product_id, newQuantity);
+    } catch (err) {
+      if (
+        err instanceof CartValidationError &&
+        err.message === "INSUFFICIENT_STOCK"
+      ) {
+        const currentStock = db
+          .prepare("SELECT stock FROM products WHERE id = ?")
+          .get(sale.product_id).stock;
+        throw new CartValidationError(
+          `Stoo haitoshi kwa kiasi kipya — ${currentStock} pekee zingekuwepo`,
+        );
+      }
+      throw err;
+    }
+
+    const totalRevenue = newSellingPrice * newQuantity;
+    const profit = totalRevenue - consumption.totalCost;
+    const editedAt = new Date().toISOString();
+
+    db.prepare(
+      `
+    UPDATE sales SET quantity = ?, buying_price = ?, selling_price = ?, total_cost = ?, total_revenue = ?,
+      profit = ?, notes = ?, edited_at = ?, batch_breakdown = ?
+    WHERE id = ?
+  `,
+    ).run(
+      newQuantity,
+      consumption.effectiveBuyingPrice,
+      newSellingPrice,
+      consumption.totalCost,
+      totalRevenue,
+      profit,
+      notes || "",
+      editedAt,
+      JSON.stringify(consumption.breakdown),
+      saleId,
+    );
+
+    db.prepare(
+      `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'edited a sale', ?, NULL, ?)`,
+    ).run(
+      genId("al"),
+      `${product.name} → ${newQuantity} × TZS ${Math.round(newSellingPrice).toLocaleString("en-US")}`,
+      editedAt,
+    );
+
+    return db.prepare("SELECT * FROM sales WHERE id = ?").get(saleId);
+  },
+);
+
+function editSale(
+  saleId,
+  { quantity: newQuantity, sellingPrice: newSellingPrice, notes },
+) {
+  if (!newQuantity || newQuantity <= 0)
+    return { success: false, error: "Weka kiasi sahihi" };
+  if (!newSellingPrice || newSellingPrice <= 0)
+    return { success: false, error: "Weka bei sahihi ya kuuza" };
+
+  try {
+    const row = editSaleTx(saleId, newQuantity, newSellingPrice, notes);
+    return {
+      success: true,
+      sale: {
+        id: row.id,
+        productId: row.product_id,
+        productName: row.product_name,
+        quantity: row.quantity,
+        buyingPrice: row.buying_price,
+        sellingPrice: row.selling_price,
+        totalCost: row.total_cost,
+        totalRevenue: row.total_revenue,
+        profit: row.profit,
+        notes: row.notes,
+        editedAt: row.edited_at,
+        batchBreakdown: row.batch_breakdown
+          ? JSON.parse(row.batch_breakdown)
+          : null,
+      },
+    };
+  } catch (err) {
+    if (err instanceof CartValidationError) {
+      if (err.message === "SALE_NOT_FOUND")
+        return { success: false, error: "Muuzo haupatikani" };
+      if (err.message === "PRODUCT_NOT_FOUND")
+        return { success: false, error: "Bidhaa haipatikani tena" };
+      return { success: false, error: err.message };
+    }
+    throw err;
+  }
+}
+
+// Simpler than editing — no new quantity to re-consume, just a straight
+// restore of what the sale took, then remove the record.
+const deleteSaleTx = db.transaction((saleId) => {
+  const sale = db.prepare("SELECT * FROM sales WHERE id = ?").get(saleId);
+  if (!sale) throw new CartValidationError("SALE_NOT_FOUND");
+
+  const product = db
+    .prepare("SELECT * FROM products WHERE id = ?")
+    .get(sale.product_id);
+  if (product) {
+    const originalBuyingPrice =
+      sale.buying_price ??
+      (sale.quantity > 0
+        ? sale.selling_price - (sale.profit || 0) / sale.quantity
+        : product.buying_price);
+    const breakdown = sale.batch_breakdown
+      ? JSON.parse(sale.batch_breakdown)
+      : null;
+    restoreBatchesFromBreakdown(
+      sale.product_id,
+      breakdown,
+      sale.quantity,
+      originalBuyingPrice,
+      new Date().toISOString(),
+    );
+  }
+  // If the product itself was deleted since this sale happened, there's
+  // nothing to restore stock to — the sale record still gets removed.
+
+  db.prepare("DELETE FROM sales WHERE id = ?").run(saleId);
+
+  db.prepare(
+    `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'deleted a sale', ?, NULL, ?)`,
+  ).run(
+    genId("al"),
+    `${sale.product_name} × ${sale.quantity} — TZS ${Math.round(sale.total_revenue).toLocaleString("en-US")}`,
+    new Date().toISOString(),
+  );
+});
+
+function deleteSale(saleId) {
+  try {
+    deleteSaleTx(saleId);
+    return { success: true };
+  } catch (err) {
+    if (
+      err instanceof CartValidationError &&
+      err.message === "SALE_NOT_FOUND"
+    ) {
+      return { success: false, error: "Muuzo haupatikani" };
+    }
+    throw err;
+  }
+}
+
+// Same overpayment-prevention reasoning as recordSupplierPayment — the
+// balance check and the write happen in the same transaction, closing
+// the same race a separate read-then-write would leave open.
+const recordCreditPaymentTx = db.transaction(
+  (creditSaleId, amount, paymentMethod) => {
+    const cs = db
+      .prepare("SELECT * FROM credit_sales WHERE id = ?")
+      .get(creditSaleId);
+    if (!cs) throw new CartValidationError("Deni halipatikani");
+
+    const remaining = cs.total_amount - cs.amount_paid;
+    if (amount > remaining)
+      throw new CartValidationError(
+        `Kiasi kinazidi deni lililobaki (${Math.round(remaining)})`,
+      );
+
+    const newAmountPaid = cs.amount_paid + amount;
+    const newStatus = newAmountPaid >= cs.total_amount ? "paid" : "partial";
+    const date = new Date().toISOString();
+
+    db.prepare(
+      "UPDATE credit_sales SET amount_paid = ?, status = ? WHERE id = ?",
+    ).run(newAmountPaid, newStatus, creditSaleId);
+    db.prepare(
+      "INSERT INTO credit_sale_payments (id, credit_sale_id, amount, payment_method, date) VALUES (?, ?, ?, ?, ?)",
+    ).run(genId("ccp"), creditSaleId, amount, paymentMethod || "", date);
+    db.prepare(
+      `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'recorded a credit payment', ?, NULL, ?)`,
+    ).run(
+      genId("al"),
+      `${cs.customer_name} — TZS ${Math.round(amount).toLocaleString("en-US")}`,
+      date,
+    );
+
+    return newStatus;
+  },
+);
+
+function recordCreditPayment(creditSaleId, amount, paymentMethod) {
+  if (!amount || amount <= 0)
+    return { success: false, error: "Weka kiasi sahihi" };
+  try {
+    const status = recordCreditPaymentTx(creditSaleId, amount, paymentMethod);
+    return { success: true, isFullySettled: status === "paid" };
+  } catch (err) {
+    if (err instanceof CartValidationError)
+      return { success: false, error: err.message };
+    throw err;
+  }
+}
+
+// Deleting a credit sale isn't just removing a record — the goods it
+// represented left the shelf when it was created. Each line item
+// restores its OWN product using its OWN batch breakdown — a credit sale
+// covering two different products correctly gives each one back its own
+// real batches at its own real prices, not a single blended restoration
+// across unrelated products. Tested directly with two products, each
+// with a distinct breakdown, confirming both restore independently and
+// correctly.
+const deleteCreditSaleTx = db.transaction((creditSaleId) => {
+  const cs = db
+    .prepare("SELECT * FROM credit_sales WHERE id = ?")
+    .get(creditSaleId);
+  if (!cs) throw new CartValidationError("Deni halipatikani");
+
+  const items = db
+    .prepare("SELECT * FROM credit_sale_items WHERE credit_sale_id = ?")
+    .all(creditSaleId);
+  const restoreDate = new Date().toISOString();
+
+  for (const item of items) {
+    const product = db
+      .prepare("SELECT * FROM products WHERE id = ?")
+      .get(item.product_id);
+    if (!product) continue; // product itself was deleted since — nothing to restore stock to
+
+    const breakdown = item.batch_breakdown
+      ? JSON.parse(item.batch_breakdown)
+      : null;
+    const fallbackCost = item.cost_at_sale ?? product.buying_price ?? 0;
+    restoreBatchesFromBreakdown(
+      item.product_id,
+      breakdown,
+      item.quantity,
+      fallbackCost,
+      restoreDate,
+    );
+  }
+
+  db.prepare("DELETE FROM credit_sales WHERE id = ?").run(creditSaleId); // cascades items + payments
+
+  db.prepare(
+    `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'deleted a credit sale', ?, NULL, ?)`,
+  ).run(
+    genId("al"),
+    `${cs.customer_name} — TZS ${Math.round(cs.total_amount).toLocaleString("en-US")}`,
+    restoreDate,
+  );
+});
+
+function deleteCreditSale(creditSaleId) {
+  try {
+    deleteCreditSaleTx(creditSaleId);
+    return { success: true };
+  } catch (err) {
+    if (err instanceof CartValidationError)
+      return { success: false, error: err.message };
+    throw err;
+  }
+}
+
 function getActivityLog() {
   return db
     .prepare("SELECT * FROM activity_log ORDER BY date DESC")
@@ -539,6 +1153,8 @@ const completeSaleTx = db.transaction(
     paymentMethod,
     accountId,
     accountLabel,
+    customerPhone,
+    customerName,
   ) => {
     const product = db
       .prepare("SELECT * FROM products WHERE id = ?")
@@ -598,8 +1214,8 @@ const completeSaleTx = db.transaction(
 
     db.prepare(
       `
-    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown)
-    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdown)
+    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown, customer_phone, customer_name)
+    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdown, @customerPhone, @customerName)
   `,
     ).run({
       id: saleId,
@@ -617,6 +1233,8 @@ const completeSaleTx = db.transaction(
       notes: "",
       date,
       breakdown: breakdownJson,
+      customerPhone: customerPhone || null,
+      customerName: customerName || null,
     });
 
     db.prepare(
@@ -647,6 +1265,8 @@ const completeSaleTx = db.transaction(
       date,
       editedAt: null,
       batchBreakdown: breakdown,
+      customerPhone: customerPhone || null,
+      customerName: customerName || null,
     };
   },
 );
@@ -658,6 +1278,8 @@ function completeSale({
   paymentMethod,
   accountId,
   accountLabel,
+  customerPhone,
+  customerName,
 }) {
   if (!quantity || quantity <= 0)
     return { success: false, error: "Weka kiasi sahihi" };
@@ -672,6 +1294,8 @@ function completeSale({
       paymentMethod,
       accountId,
       accountLabel,
+      customerPhone,
+      customerName,
     );
     return { success: true, sale };
   } catch (err) {
@@ -766,8 +1390,8 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
 
     db.prepare(
       `
-      INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown)
-      VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdownJson)
+      INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown, customer_phone, customer_name)
+      VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdownJson, @customerPhone, @customerName)
     `,
     ).run({
       id: saleId,
@@ -785,6 +1409,8 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
       notes: "",
       date,
       breakdownJson: JSON.stringify(breakdown),
+      customerPhone: meta.customerPhone || null,
+      customerName: meta.customerName || null,
     });
 
     saleRows.push({
@@ -803,6 +1429,8 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
       notes: "",
       date,
       batchBreakdown: breakdown,
+      customerPhone: meta.customerPhone || null,
+      customerName: meta.customerName || null,
     });
   }
 
@@ -1037,4 +1665,14 @@ module.exports = {
   updateStaff,
   deleteStaff,
   identifyStaffByPin,
+  addSupplier,
+  deleteSupplier,
+  recordSupply,
+  recordSupplierPayment,
+  addStock,
+  completeRestockCart,
+  editSale,
+  deleteSale,
+  recordCreditPayment,
+  deleteCreditSale,
 };

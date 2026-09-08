@@ -4,6 +4,7 @@ import { backupService } from "../services/backupService";
 import CrashLogModal from "../components/CrashLogModal.jsx";
 import PaymentAccountsSection from "../components/PaymentAccountsSection.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { blockInvalidNumberKeys } from "../utils/numberInput";
 
 const formatDateTime = (iso) => {
   if (!iso) return "";
@@ -392,6 +393,7 @@ const SettingsScreen = () => {
               type="number"
               value={vatRate}
               onChange={(e) => setVatRate(e.target.value)}
+              onKeyDown={blockInvalidNumberKeys}
               placeholder="18"
             />
           </>

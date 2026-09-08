@@ -39,6 +39,25 @@ export const dataService = {
   deleteStaff: (staffId) => window.hisaflow.deleteStaff(staffId),
   identifyStaffByPin: (pin) => window.hisaflow.identifyStaffByPin(pin),
 
+  addSupplier: (args) => window.hisaflow.addSupplier(args),
+  deleteSupplier: (supplierId) => window.hisaflow.deleteSupplier(supplierId),
+  recordSupply: (supplierId, amount) =>
+    window.hisaflow.recordSupply(supplierId, amount),
+  recordSupplierPayment: (supplierId, amount, paymentMethod) =>
+    window.hisaflow.recordSupplierPayment(supplierId, amount, paymentMethod),
+
+  addStock: (args) => window.hisaflow.addStock(args),
+  completeRestockCart: (cartItems, meta) =>
+    window.hisaflow.completeRestockCart(cartItems, meta),
+
+  editSale: (saleId, args) => window.hisaflow.editSale(saleId, args),
+  deleteSale: (saleId) => window.hisaflow.deleteSale(saleId),
+
+  recordCreditPayment: (creditSaleId, amount, paymentMethod) =>
+    window.hisaflow.recordCreditPayment(creditSaleId, amount, paymentMethod),
+  deleteCreditSale: (creditSaleId) =>
+    window.hisaflow.deleteCreditSale(creditSaleId),
+
   getLicenseStatus: () => window.hisaflow.getLicenseStatus(),
   activateLicense: (key) => window.hisaflow.activateLicense(key),
 

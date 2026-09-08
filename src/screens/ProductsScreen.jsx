@@ -74,7 +74,11 @@ const ProductsScreen = ({ initialFilter }) => {
     await dataService.saveProducts(updated);
   };
 
-  const handleSaveProduct = async ({ product, supplierLink }) => {
+  const handleSaveProduct = async ({
+    product,
+    supplierLink,
+    stockPaymentMethod,
+  }) => {
     const existingProduct = products.find((p) => p.id === product.id);
     const exists = !!existingProduct;
     // Preserve the real creation date on every edit — product here is a
@@ -87,7 +91,11 @@ const ProductsScreen = ({ initialFilter }) => {
     };
     // A brand new product with initial stock gets a real first batch,
     // same as restocking does — not just flat stock/buyingPrice fields
-    // left for lazy migration to sort out on first touch.
+    // left for lazy migration to sort out on first touch. The payment
+    // method is recorded either way — via the supplier link if one was
+    // chosen, or directly from stockPaymentMethod otherwise, so "I paid
+    // cash for this" survives even for a one-off purchase with no
+    // formal supplier record.
     const finalProduct =
       !exists && productWithCreatedAt.stock > 0
         ? batchService.addBatch(
@@ -106,7 +114,7 @@ const ProductsScreen = ({ initialFilter }) => {
                   supplierName: supplierLink.supplierName,
                   paymentMethod: supplierLink.paymentMethod,
                 }
-              : {},
+              : { paymentMethod: stockPaymentMethod || null },
           )
         : productWithCreatedAt;
     const updated = exists

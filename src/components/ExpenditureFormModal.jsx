@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { blockInvalidNumberKeys } from "../utils/numberInput";
 
 const ExpenditureFormModal = ({ visible, onSave, onClose }) => {
   const { t } = useLanguage();
@@ -80,6 +81,7 @@ const ExpenditureFormModal = ({ visible, onSave, onClose }) => {
           type="number"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
+          onKeyDown={blockInvalidNumberKeys}
           placeholder="0"
         />
 

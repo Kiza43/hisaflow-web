@@ -34,6 +34,34 @@ const startOfYear = () => {
 };
 
 export const analyticsService = {
+  // Credit sales earn their profit the moment the sale happens — goods
+  // leave the shelf at a known cost, sold at a known price — regardless
+  // of whether the cash has actually been collected yet. Without this,
+  // a shop doing real credit business would see revenue and profit that
+  // only reflects cash sales, while expenses (unrelated to payment
+  // method) count in full — making net profit look falsely negative.
+  // Each credit sale item is converted into the same shape a regular
+  // sale uses, so both can be combined for revenue, profit, and
+  // best-seller calculations.
+  flattenCreditSaleItems(creditSales) {
+    const flattened = [];
+    creditSales.forEach((cs) => {
+      (cs.items || []).forEach((item) => {
+        const cost = (item.costAtSale || 0) * item.quantity;
+        const revenue = item.sellingPrice * item.quantity;
+        flattened.push({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          totalRevenue: revenue,
+          profit: revenue - cost,
+          date: cs.date,
+        });
+      });
+    });
+    return flattened;
+  },
+
   filterSalesByPeriod(sales, period) {
     if (period === "all") return sales;
     // Previously any period other than 'today'/'week'/'all' silently

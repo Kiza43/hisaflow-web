@@ -105,6 +105,8 @@ const translations = {
     creditSaleLabel: "Uza kwa Mkopo",
     customerNamePlaceholder: "Jina la Mteja",
     customerPhonePlaceholder: "Namba ya Simu (si lazima)",
+    receiptNamePlaceholder: "Jina la mteja (si lazima)",
+    receiptPhonePlaceholder: "Namba ya mteja - tuma risiti kwa SMS (si lazima)",
     completeCreditSaleButton: "Kamilisha Uuzaji wa Mkopo",
     navCredit: "Mikopo",
     totalOutstandingLabel: "Jumla ya Madeni",
@@ -376,6 +378,8 @@ const translations = {
     enterAccountLabelError: "Weka jina la akaunti",
     enterAccountNumberError: "Weka namba ya akaunti",
     receivedViaLabel: "Ilipokelewa Kupitia",
+    noPaymentAccountsHint:
+      "Kidokezo: ongeza majina ya akaunti zako mahususi kwenye Mipangilio kwa maelezo zaidi",
     notifyPastBuyersTitle: "Wajulishe Wateja Waliokwisha Nunua",
     noPastBuyersFound: "Hakuna mteja aliyewahi nunua bidhaa hii",
     nameTokenHint: "Tumia {name} kuweka jina la mteja kiotomatiki",
@@ -521,6 +525,9 @@ const translations = {
     creditSaleLabel: "Sell on Credit",
     customerNamePlaceholder: "Customer Name",
     customerPhonePlaceholder: "Phone Number (optional)",
+    receiptNamePlaceholder: "Customer's name (optional)",
+    receiptPhonePlaceholder:
+      "Customer's number - send receipt by SMS (optional)",
     completeCreditSaleButton: "Complete Credit Sale",
     navCredit: "Credit",
     totalOutstandingLabel: "Total Outstanding",
@@ -791,6 +798,8 @@ const translations = {
     enterAccountLabelError: "Enter the account name",
     enterAccountNumberError: "Enter the account number",
     receivedViaLabel: "Received Via",
+    noPaymentAccountsHint:
+      "Tip: add your specific account names in Settings for more detail",
     notifyPastBuyersTitle: "Notify Past Buyers",
     noPastBuyersFound: "No customer has bought this product before",
     nameTokenHint: "Use {name} to insert the customer's name automatically",

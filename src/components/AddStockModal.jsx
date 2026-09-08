@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { dataService } from "../services/dataService";
 import { supplierService } from "../services/supplierService";
+import { blockInvalidNumberKeys } from "../utils/numberInput";
 import SupplierPicker from "./SupplierPicker.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
@@ -89,6 +90,7 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
           type="number"
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
+          onKeyDown={blockInvalidNumberKeys}
           placeholder="0"
           autoFocus
         />
@@ -99,6 +101,7 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
           type="number"
           value={buyingPrice}
           onChange={(e) => setBuyingPrice(e.target.value)}
+          onKeyDown={blockInvalidNumberKeys}
           placeholder="0"
         />
 
@@ -116,50 +119,53 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
         />
 
         {supplierId && (
-          <>
-            <div style={styles.paymentToggleRow}>
-              <button
-                style={{
-                  ...styles.paymentToggle,
-                  ...(paymentStatus === "paid"
-                    ? styles.paymentToggleActive
-                    : {}),
-                }}
-                onClick={() => setPaymentStatus("paid")}
-              >
-                {t("paidNowOption")}
-              </button>
-              <button
-                style={{
-                  ...styles.paymentToggle,
-                  ...(paymentStatus === "credit"
-                    ? styles.paymentToggleActiveCredit
-                    : {}),
-                }}
-                onClick={() => setPaymentStatus("credit")}
-              >
-                {t("oweSupplierOption")}
-              </button>
-            </div>
+          <div style={styles.paymentToggleRow}>
+            <button
+              style={{
+                ...styles.paymentToggle,
+                ...(paymentStatus === "paid" ? styles.paymentToggleActive : {}),
+              }}
+              onClick={() => setPaymentStatus("paid")}
+            >
+              {t("paidNowOption")}
+            </button>
+            <button
+              style={{
+                ...styles.paymentToggle,
+                ...(paymentStatus === "credit"
+                  ? styles.paymentToggleActiveCredit
+                  : {}),
+              }}
+              onClick={() => setPaymentStatus("credit")}
+            >
+              {t("oweSupplierOption")}
+            </button>
+          </div>
+        )}
 
-            {paymentStatus === "paid" && (
-              <div style={styles.methodRow}>
-                {PAYMENT_METHODS.map((m) => (
-                  <button
-                    key={m.value}
-                    style={{
-                      ...styles.methodChip,
-                      ...(paymentMethod === m.value
-                        ? styles.methodChipActive
-                        : {}),
-                    }}
-                    onClick={() => setPaymentMethod(m.value)}
-                  >
-                    {t(m.labelKey)}
-                  </button>
-                ))}
-              </div>
-            )}
+        {/* Recording how stock was paid for doesn't require a supplier
+            first — "owe supplier" needs someone to owe, but "I paid cash
+            for this" is true whether or not a formal supplier record
+            exists for a one-off purchase. */}
+        {(!supplierId || paymentStatus === "paid") && (
+          <>
+            <label style={styles.label}>{t("paymentMethodLabel")}</label>
+            <div style={styles.methodRow}>
+              {PAYMENT_METHODS.map((m) => (
+                <button
+                  key={m.value}
+                  style={{
+                    ...styles.methodChip,
+                    ...(paymentMethod === m.value
+                      ? styles.methodChipActive
+                      : {}),
+                  }}
+                  onClick={() => setPaymentMethod(m.value)}
+                >
+                  {t(m.labelKey)}
+                </button>
+              ))}
+            </div>
           </>
         )}
 

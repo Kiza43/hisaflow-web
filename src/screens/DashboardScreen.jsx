@@ -20,6 +20,7 @@ const DashboardScreen = ({ onNavigate }) => {
   const { t } = useLanguage();
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
+  const [creditSales, setCreditSales] = useState([]);
   const [expenditures, setExpenditures] = useState([]);
   const [showReport, setShowReport] = useState(false);
   const [showRecap, setShowRecap] = useState(false);
@@ -39,6 +40,7 @@ const DashboardScreen = ({ onNavigate }) => {
       }
     });
     dataService.getSales().then(setSales);
+    dataService.getCreditSales().then(setCreditSales);
     dataService.getExpenditures().then(setExpenditures);
   }, []);
 
@@ -66,7 +68,14 @@ const DashboardScreen = ({ onNavigate }) => {
     maxSellerQty,
     maxProfitAmount,
   } = useMemo(() => {
-    const periodSales = analyticsService.filterSalesByPeriod(sales, period);
+    const combinedSales = [
+      ...sales,
+      ...analyticsService.flattenCreditSaleItems(creditSales),
+    ];
+    const periodSales = analyticsService.filterSalesByPeriod(
+      combinedSales,
+      period,
+    );
     const periodExpenditures = analyticsService.filterSalesByPeriod(
       expenditures,
       period,
@@ -100,7 +109,7 @@ const DashboardScreen = ({ onNavigate }) => {
       maxSellerQty: sellers[0]?.quantity || 1,
       maxProfitAmount: profitable[0]?.profit || 1,
     };
-  }, [sales, expenditures, products, period]);
+  }, [sales, creditSales, expenditures, products, period]);
 
   return (
     <div style={styles.wrap}>

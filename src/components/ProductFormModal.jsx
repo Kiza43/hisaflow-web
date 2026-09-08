@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { dataService } from "../services/dataService";
 import SupplierPicker from "./SupplierPicker.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { blockInvalidNumberKeys } from "../utils/numberInput";
 
 // Same starter set the phone app ships with — covers most small-shop
 // inventory without typing anything, while "Other" still allows a fully
@@ -158,6 +159,12 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
           imageUri: form.imageUri || null,
           expiryDate: form.expiryDate || null,
         },
+        // How the initial stock was actually paid for — captured
+        // regardless of whether a supplier was chosen, since "I paid
+        // cash for this" is true for a one-off purchase too, not just
+        // stock bought from a tracked supplier.
+        stockPaymentMethod:
+          !editingProduct && stock > 0 ? form.supplierPaymentMethod : null,
         // Only meaningful for genuinely new stock entering the shop — editing
         // an existing product's price shouldn't retroactively create a new
         // supplier debt for stock that's already been there.
@@ -314,6 +321,7 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
                   onChange={(e) =>
                     setForm({ ...form, buyingPrice: e.target.value })
                   }
+                  onKeyDown={blockInvalidNumberKeys}
                   placeholder="0"
                   autoFocus
                 />
@@ -327,6 +335,7 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
                   onChange={(e) =>
                     setForm({ ...form, sellingPrice: e.target.value })
                   }
+                  onKeyDown={blockInvalidNumberKeys}
                   placeholder="0"
                 />
               </div>
@@ -384,6 +393,7 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
               type="number"
               value={form.stock}
               onChange={(e) => setForm({ ...form, stock: e.target.value })}
+              onKeyDown={blockInvalidNumberKeys}
               placeholder="0"
               disabled={!!editingProduct}
               autoFocus={!editingProduct}
@@ -444,25 +454,35 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
                   </div>
                 )}
 
-                {form.supplierId && form.supplierPaymentStatus === "paid" && (
-                  <div style={styles.methodRow}>
-                    {PAYMENT_METHODS.map((m) => (
-                      <button
-                        key={m.value}
-                        style={{
-                          ...styles.methodChip,
-                          ...(form.supplierPaymentMethod === m.value
-                            ? styles.methodChipActive
-                            : {}),
-                        }}
-                        onClick={() =>
-                          setForm({ ...form, supplierPaymentMethod: m.value })
-                        }
-                      >
-                        {t(m.labelKey)}
-                      </button>
-                    ))}
-                  </div>
+                {/* Recording how stock was paid for doesn't require a
+                    supplier first — "owe supplier" needs someone to owe,
+                    but "I paid cash for this" is true whether or not a
+                    formal supplier record exists for a one-off purchase. */}
+                {(!form.supplierId ||
+                  form.supplierPaymentStatus === "paid") && (
+                  <>
+                    <label style={styles.label}>
+                      {t("paymentMethodLabel")}
+                    </label>
+                    <div style={styles.methodRow}>
+                      {PAYMENT_METHODS.map((m) => (
+                        <button
+                          key={m.value}
+                          style={{
+                            ...styles.methodChip,
+                            ...(form.supplierPaymentMethod === m.value
+                              ? styles.methodChipActive
+                              : {}),
+                          }}
+                          onClick={() =>
+                            setForm({ ...form, supplierPaymentMethod: m.value })
+                          }
+                        >
+                          {t(m.labelKey)}
+                        </button>
+                      ))}
+                    </div>
+                  </>
                 )}
               </>
             )}

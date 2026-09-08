@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { blockInvalidNumberKeys } from "../utils/numberInput";
 
 const formatTZS = (amount) => {
   const v = typeof amount === "number" && !isNaN(amount) ? amount : 0;
@@ -74,6 +75,7 @@ const PaySupplierModal = ({ visible, supplier, onSave, onClose }) => {
           type="number"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
+          onKeyDown={blockInvalidNumberKeys}
           placeholder="0"
           autoFocus
         />
