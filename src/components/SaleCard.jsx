@@ -63,6 +63,14 @@ const SaleCard = ({ sale, onEdit, onDelete }) => {
           <span style={styles.rowLabel}>{t("sellingPriceLabel")}</span>
           <span style={styles.rowValue}>{formatTZS(sale.sellingPrice)}</span>
         </div>
+        {sale.discount > 0 && (
+          <div style={styles.row}>
+            <span style={styles.rowLabel}>{t("discountLabel")}</span>
+            <span style={{ ...styles.rowValue, color: "var(--danger)" }}>
+              −{formatTZS(sale.discount)}
+            </span>
+          </div>
+        )}
       </div>
 
       <div style={styles.divider}>

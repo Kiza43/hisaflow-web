@@ -14,13 +14,26 @@ const formatTZS = (amount) => {
 // commits on blur/Enter instead (same pattern Amazon's own cart quantity
 // field uses), while the +/- buttons still update immediately and this
 // row stays in sync with them via the effect below.
-const CartItemRow = ({ item, onUpdateQuantity, onRemove }) => {
+const CartItemRow = ({
+  item,
+  showDiscount,
+  onUpdateQuantity,
+  onUpdateDiscount,
+  onRemove,
+}) => {
   const { t } = useLanguage();
   const [qtyInput, setQtyInput] = useState(String(item.quantity));
+  const [discountInput, setDiscountInput] = useState(
+    item.discount ? String(item.discount) : "",
+  );
 
   useEffect(() => {
     setQtyInput(String(item.quantity));
   }, [item.quantity]);
+
+  useEffect(() => {
+    setDiscountInput(item.discount ? String(item.discount) : "");
+  }, [item.discount]);
 
   const commitQuantity = () => {
     const parsed = parseInt(qtyInput, 10);
@@ -29,6 +42,22 @@ const CartItemRow = ({ item, onUpdateQuantity, onRemove }) => {
       return;
     }
     onUpdateQuantity(item.productId, parsed);
+  };
+
+  const commitDiscount = () => {
+    if (!discountInput.trim()) {
+      // Cleared intentionally — this is a real, valid "no discount"
+      // state, not a mistake to revert from.
+      onUpdateDiscount(item.productId, 0);
+      return;
+    }
+    const parsed = parseFloat(discountInput);
+    if (isNaN(parsed) || parsed < 0) {
+      // Genuinely unusable input (not just empty) - revert rather than guess
+      setDiscountInput(item.discount ? String(item.discount) : "");
+      return;
+    }
+    onUpdateDiscount(item.productId, parsed);
   };
 
   return (
@@ -40,8 +69,17 @@ const CartItemRow = ({ item, onUpdateQuantity, onRemove }) => {
             {formatTZS(item.sellingPrice)} / {item.unit}
           </div>
         </div>
-        <div style={styles.itemTotal}>
-          {formatTZS(item.sellingPrice * item.quantity)}
+        <div style={{ textAlign: "right" }}>
+          <div style={styles.itemTotal}>
+            {formatTZS(
+              item.sellingPrice * item.quantity - (item.discount || 0),
+            )}
+          </div>
+          {item.discount > 0 && (
+            <div style={styles.itemDiscountNote}>
+              −{formatTZS(item.discount)}
+            </div>
+          )}
         </div>
       </div>
       <div style={styles.itemBottomRow}>
@@ -78,6 +116,23 @@ const CartItemRow = ({ item, onUpdateQuantity, onRemove }) => {
           {t("deleteButton")}
         </button>
       </div>
+      {showDiscount && (
+        <div style={styles.discountRow}>
+          <span style={styles.discountRowLabel}>{t("discountLabel")}</span>
+          <input
+            style={styles.discountInput}
+            type="number"
+            value={discountInput}
+            onChange={(e) => setDiscountInput(e.target.value)}
+            onBlur={commitDiscount}
+            onKeyDown={(e) => {
+              blockInvalidNumberKeys(e);
+              if (e.key === "Enter") e.target.blur();
+            }}
+            placeholder="0"
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -135,6 +190,29 @@ const styles = {
     color: "var(--text-primary)",
   },
   itemTotal: { fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" },
+  itemDiscountNote: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "var(--danger)",
+    marginTop: 2,
+  },
+  discountRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 8 },
+  discountRowLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "var(--text-muted)",
+  },
+  discountInput: {
+    width: 80,
+    height: 28,
+    borderRadius: 8,
+    border: "1.5px solid var(--border)",
+    background: "var(--bg)",
+    fontSize: 12,
+    fontWeight: 700,
+    textAlign: "center",
+    color: "var(--text-primary)",
+  },
   removeBtn: {
     background: "none",
     border: "none",

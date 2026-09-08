@@ -72,9 +72,16 @@ const ReceiptModal = ({ visible, sale, settings, onClose }) => {
                 <div style={styles.itemSub}>
                   {item.quantity} × {formatTZS(item.sellingPrice)}
                 </div>
+                {item.discount > 0 && (
+                  <div style={styles.itemDiscountSub}>
+                    {t("discountLabel")}: −{formatTZS(item.discount)}
+                  </div>
+                )}
               </div>
               <div style={styles.itemTotal}>
-                {formatTZS(item.quantity * item.sellingPrice)}
+                {formatTZS(
+                  item.quantity * item.sellingPrice - (item.discount || 0),
+                )}
               </div>
             </div>
           ))}
@@ -180,6 +187,12 @@ const styles = {
   },
   itemName: { fontSize: 13, fontWeight: 700 },
   itemSub: { fontSize: 11, color: "#78716C", marginTop: 1 },
+  itemDiscountSub: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#B4645C",
+    marginTop: 1,
+  },
   itemTotal: { fontSize: 13, fontWeight: 700 },
   totalRow: {
     display: "flex",
@@ -188,6 +201,8 @@ const styles = {
   },
   subTotalLabel: { fontSize: 11, color: "#78716C" },
   subTotalValue: { fontSize: 11, color: "#78716C" },
+  discountLabel: { fontSize: 12, fontWeight: 700, color: "#B4645C" },
+  discountValue: { fontSize: 12, fontWeight: 700, color: "#B4645C" },
   totalLabel: { fontSize: 14, fontWeight: 800 },
   totalValue: { fontSize: 16, fontWeight: 800 },
   creditNote: { fontSize: 12, fontWeight: 800, color: "#8A5A1E" },

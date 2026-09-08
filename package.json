@@ -1,6 +1,6 @@
 {
   "name": "hisaflow-desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "HisaFlow desktop app - offline-capable, syncs when connected",
   "main": "electron/main.js",

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import LoginScreen from "./screens/LoginScreen.jsx";
 import TrialLockScreen from "./screens/TrialLockScreen.jsx";
-import DashboardScreen from "./screens/Dashboardscreen.jsx";
+import DashboardScreen from "./screens/DashboardScreen.jsx";
 import ProductsScreen from "./screens/ProductsScreen.jsx";
 import SalesScreen from "./screens/SalesScreen.jsx";
+import OrdersScreen from "./screens/OrdersScreen.jsx";
 import CreditScreen from "./screens/CreditScreen.jsx";
 import CustomersScreen from "./screens/CustomersScreen.jsx";
 import ExpensesScreen from "./screens/ExpensesScreen.jsx";
@@ -11,8 +12,8 @@ import SuppliersScreen from "./screens/SuppliersScreen.jsx";
 import StaffScreen from "./screens/StaffScreen.jsx";
 import ActivityLogScreen from "./screens/ActivityLogScreen.jsx";
 import SettingsScreen from "./screens/SettingsScreen.jsx";
-import Sidebar from "./components/Sidebar.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
+import Sidebar from "./components/SideBar.jsx";
 import { RestockCartProvider } from "./context/RestockCartContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { dataService } from "./services/dataService";
@@ -32,6 +33,7 @@ const SCREEN_PERMISSIONS = {
   dashboard: null,
   products: "manageProducts",
   sales: "manageSales",
+  orders: "manageSales",
   credit: "manageCredit",
   customers: "manageCredit",
   expenses: "manageExpenses",
@@ -243,6 +245,12 @@ const App = () => {
                 )}
                 {activeScreen === "sales" && canAccess("sales") && (
                   <SalesScreen />
+                )}
+                {activeScreen === "orders" && canAccess("orders") && (
+                  <OrdersScreen
+                    currentUser={currentUser}
+                    onNavigate={handleNavigate}
+                  />
                 )}
                 {activeScreen === "credit" && canAccess("credit") && (
                   <CreditScreen />

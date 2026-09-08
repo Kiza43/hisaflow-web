@@ -22,6 +22,7 @@ export const salesService = {
     accountLabel,
     customerPhone,
     customerName,
+    discount,
   }) {
     return dataService.completeSale({
       productId,
@@ -32,6 +33,7 @@ export const salesService = {
       accountLabel,
       customerPhone,
       customerName,
+      discount,
     });
   },
 

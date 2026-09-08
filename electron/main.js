@@ -146,6 +146,17 @@ ipcMain.handle("credit:deleteCreditSale", (event, creditSaleId) =>
   queries.deleteCreditSale(creditSaleId),
 );
 
+ipcMain.handle("orders:createOrder", (event, args) =>
+  queries.createOrder(args),
+);
+ipcMain.handle("orders:getOrders", () => queries.getOrders());
+ipcMain.handle("orders:fulfillOrder", (event, orderId) =>
+  queries.fulfillOrder(orderId),
+);
+ipcMain.handle("orders:cancelOrder", (event, orderId) =>
+  queries.cancelOrder(orderId),
+);
+
 ipcMain.handle("license:getStatus", () => license.getLicenseStatus());
 ipcMain.handle("license:activate", (event, key) =>
   license.activateLicense(key),

@@ -41,6 +41,7 @@ const SaleFormModal = ({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [receiptPhone, setReceiptPhone] = useState("");
+  const [discount, setDiscount] = useState("");
   const [receiptName, setReceiptName] = useState("");
   const [error, setError] = useState("");
   const [completing, setCompleting] = useState(false);
@@ -75,6 +76,7 @@ const SaleFormModal = ({
 
   const qtyNum = parseFloat(quantity) || 0;
   const priceNum = parseFloat(sellingPrice) || 0;
+  const discountNum = parseFloat(discount) || 0;
   const total = qtyNum * priceNum;
 
   const handleSubmit = async () => {
@@ -93,6 +95,18 @@ const SaleFormModal = ({
           unit: selectedProduct.unit,
         }),
       );
+      return;
+    }
+    if (paymentMode === "cash" && discountNum < 0) {
+      setError(t("negativeDiscountError"));
+      return;
+    }
+    if (
+      paymentMode === "cash" &&
+      discountNum > 0 &&
+      discountNum >= priceNum * qtyNum
+    ) {
+      setError(t("discountExceedsTotalError"));
       return;
     }
 
@@ -133,6 +147,7 @@ const SaleFormModal = ({
               accountLabel,
               customerPhone: receiptPhone.trim() || undefined,
               customerName: receiptName.trim() || undefined,
+              discount: discountNum || undefined,
             });
 
       if (!result.success) {
@@ -146,9 +161,11 @@ const SaleFormModal = ({
             productName: selectedProduct.name,
             quantity: qtyNum,
             sellingPrice: priceNum,
+            discount: paymentMode === "cash" ? discountNum : 0,
           },
         ],
-        total,
+        total: total - (paymentMode === "cash" ? discountNum : 0),
+        discount: paymentMode === "cash" ? discountNum : 0,
         isCredit: paymentMode === "credit",
         paymentMethod,
         accountLabel,
@@ -176,6 +193,7 @@ const SaleFormModal = ({
     setCustomerName("");
     setCustomerPhone("");
     setReceiptPhone("");
+    setDiscount("");
     setReceiptName("");
     setError("");
     onClose();
@@ -226,6 +244,20 @@ const SaleFormModal = ({
             />
           </div>
         </div>
+
+        {paymentMode === "cash" && (
+          <>
+            <label style={styles.label}>{t("discountOptionalLabel")}</label>
+            <input
+              style={styles.input}
+              type="number"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+              onKeyDown={blockInvalidNumberKeys}
+              placeholder="0"
+            />
+          </>
+        )}
 
         <div style={styles.modeRow}>
           <button

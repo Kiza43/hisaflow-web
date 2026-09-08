@@ -27,6 +27,7 @@ export const CartProvider = ({ children }) => {
           sellingPrice: product.sellingPrice,
           buyingPrice: product.buyingPrice,
           availableStock: product.stock,
+          discount: 0,
         },
       ];
     });
@@ -45,6 +46,22 @@ export const CartProvider = ({ children }) => {
     );
   }, []);
 
+  // A discount is per line item, same reasoning as the single-product
+  // sale flow — a shop owner might discount one product in a cart
+  // without discounting everything in it. Not clamped here to the
+  // item's own total, since the quantity or price might still change
+  // after the discount is entered; the real validation happens once at
+  // checkout, against final values.
+  const updateDiscount = useCallback((productId, discount) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.productId === productId
+          ? { ...item, discount: Math.max(0, discount) }
+          : item,
+      ),
+    );
+  }, []);
+
   const removeFromCart = useCallback((productId) => {
     setItems((prev) => prev.filter((item) => item.productId !== productId));
   }, []);
@@ -53,7 +70,8 @@ export const CartProvider = ({ children }) => {
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalAmount = items.reduce(
-    (sum, item) => sum + item.quantity * item.sellingPrice,
+    (sum, item) =>
+      sum + item.quantity * item.sellingPrice - (item.discount || 0),
     0,
   );
 
@@ -63,6 +81,7 @@ export const CartProvider = ({ children }) => {
         items,
         addToCart,
         updateQuantity,
+        updateDiscount,
         removeFromCart,
         clearCart,
         totalItems,

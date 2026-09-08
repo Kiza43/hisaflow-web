@@ -79,7 +79,8 @@ function initSchema() {
       edited_at TEXT,
       batch_breakdown TEXT,
       customer_phone TEXT,
-      customer_name TEXT
+      customer_name TEXT,
+      discount REAL NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date);
     CREATE INDEX IF NOT EXISTS idx_sales_product ON sales(product_id);
@@ -193,6 +194,34 @@ function initSchema() {
       licensed INTEGER NOT NULL DEFAULT 0,
       license_key TEXT
     );
+    -- An order ticket a staff member writes up for a customer before
+    -- they reach the cashier — not a sale itself, but a record of what
+    -- was promised and who promised it. order_number is sequential and
+    -- human-facing (shown on the physical/printed ticket); the cashier
+    -- later looks an order up by that number to fulfill it into a real
+    -- sale, at which point stock actually leaves the shelf.
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      order_number INTEGER NOT NULL UNIQUE,
+      issued_by TEXT,
+      customer_name TEXT,
+      customer_phone TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      date TEXT NOT NULL,
+      fulfilled_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_orders_number ON orders(order_number);
+    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+
+    CREATE TABLE IF NOT EXISTS order_items (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL,
+      product_name TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      expected_price REAL
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
   `);
 }
 
@@ -215,6 +244,7 @@ addColumnIfMissing("credit_sale_items", "batch_breakdown", "TEXT");
 addColumnIfMissing("products", "created_at", "TEXT");
 addColumnIfMissing("sales", "customer_phone", "TEXT");
 addColumnIfMissing("sales", "customer_name", "TEXT");
+addColumnIfMissing("sales", "discount", "REAL NOT NULL DEFAULT 0");
 
 // Existing products from before this fix have no created_at recorded.
 // Backfilling with each product's earliest stock batch date is a

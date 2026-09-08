@@ -21,10 +21,24 @@ const GENERIC_METHODS = [
   { value: "lipa_namba", labelKey: "lipaNambaMethodOption" },
 ];
 
+// Three steps — pick items, review pricing and discounts, then pay —
+// rather than one screen carrying quantity controls, discount inputs,
+// payment method, and customer fields all at once. Each screen asks for
+// one kind of decision at a time, same reasoning as the product form's
+// multi-step rebuild earlier this session.
+const STEPS = ["items", "review", "pay"];
+
 const CartModal = ({ visible, onClose, onCompleted }) => {
-  const { items, updateQuantity, removeFromCart, clearCart, totalAmount } =
-    useCart();
+  const {
+    items,
+    updateQuantity,
+    updateDiscount,
+    removeFromCart,
+    clearCart,
+    totalAmount,
+  } = useCart();
   const { t } = useLanguage();
+  const [step, setStep] = useState(0);
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash"); // 'cash' | 'credit'
@@ -43,6 +57,26 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
   }, [visible]);
 
   if (!visible) return null;
+
+  const resetAndClose = () => {
+    setStep(0);
+    setError("");
+    onClose();
+  };
+
+  const goNext = () => {
+    setError("");
+    if (step === 0 && items.length === 0) {
+      setError(t("cartEmpty"));
+      return;
+    }
+    setStep((s) => Math.min(s + 1, STEPS.length - 1));
+  };
+
+  const goBack = () => {
+    setError("");
+    setStep((s) => Math.max(s - 1, 0));
+  };
 
   const handleComplete = async () => {
     setError("");
@@ -86,6 +120,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
           productName: item.productName,
           quantity: item.quantity,
           sellingPrice: item.sellingPrice,
+          discount: item.discount || 0,
         })),
         total: totalAmount,
         isCredit: paymentMode === "credit",
@@ -103,6 +138,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
       setReceiptName("");
       setPaymentMode("cash");
       setReceivedVia("cash");
+      setStep(0);
       onCompleted(saleData);
     } catch (err) {
       console.error("Cart completion error:", err);
@@ -112,161 +148,254 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
     }
   };
 
+  const stepLabel = (i) => {
+    if (i === 0) return t("cartStepItems");
+    if (i === 1) return t("cartStepReview");
+    return t("cartStepPay");
+  };
+  const isLastStep = step === STEPS.length - 1;
+
   return (
-    <div style={styles.overlay} onClick={onClose}>
+    <div style={styles.overlay} onClick={resetAndClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
           <h2 style={styles.title}>{t("yourCartTitle")}</h2>
-          <button style={styles.closeBtn} onClick={onClose}>
+          <button style={styles.closeBtn} onClick={resetAndClose}>
             Close
           </button>
         </div>
 
+        <div style={styles.stepRow}>
+          {STEPS.map((key, i) => (
+            <React.Fragment key={key}>
+              <div
+                style={{
+                  ...styles.stepDot,
+                  ...(i <= step ? styles.stepDotActive : {}),
+                }}
+              >
+                {i < step ? "✓" : i + 1}
+              </div>
+              {i < STEPS.length - 1 && (
+                <div
+                  style={{
+                    ...styles.stepLine,
+                    ...(i < step ? styles.stepLineActive : {}),
+                  }}
+                />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+        <div style={styles.stepIndicatorText}>{stepLabel(step)}</div>
+
         {error && <div style={styles.error}>{error}</div>}
 
-        {items.length === 0 ? (
+        {items.length === 0 && step === 0 ? (
           <div style={styles.empty}>{t("cartEmpty")}</div>
         ) : (
-          <div style={styles.itemList}>
-            {items.map((item) => (
-              <CartItemRow
-                key={item.productId}
-                item={item}
-                onUpdateQuantity={updateQuantity}
-                onRemove={removeFromCart}
-              />
-            ))}
-          </div>
+          <>
+            {step === 0 && (
+              <div style={styles.itemList}>
+                {items.map((item) => (
+                  <CartItemRow
+                    key={item.productId}
+                    item={item}
+                    showDiscount={false}
+                    onUpdateQuantity={updateQuantity}
+                    onUpdateDiscount={updateDiscount}
+                    onRemove={removeFromCart}
+                  />
+                ))}
+              </div>
+            )}
+
+            {step === 1 && (
+              <div style={styles.itemList}>
+                {items.map((item) => (
+                  <CartItemRow
+                    key={item.productId}
+                    item={item}
+                    showDiscount={paymentMode === "cash"}
+                    onUpdateQuantity={updateQuantity}
+                    onUpdateDiscount={updateDiscount}
+                    onRemove={removeFromCart}
+                  />
+                ))}
+                <div style={styles.totalRow}>
+                  <span
+                    style={{ fontWeight: 700, color: "var(--text-secondary)" }}
+                  >
+                    {t("tableTotal")}
+                  </span>
+                  <span
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 20,
+                      color: "var(--primary-dark)",
+                    }}
+                  >
+                    {formatTZS(totalAmount)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {step === 2 && (
+              <>
+                <div style={styles.modeRow}>
+                  <button
+                    style={{
+                      ...styles.modeBtn,
+                      ...(paymentMode === "cash" ? styles.modeBtnActive : {}),
+                    }}
+                    onClick={() => setPaymentMode("cash")}
+                  >
+                    {t("cashSaleLabel")}
+                  </button>
+                  <button
+                    style={{
+                      ...styles.modeBtn,
+                      ...(paymentMode === "credit"
+                        ? styles.modeBtnActiveCredit
+                        : {}),
+                    }}
+                    onClick={() => {
+                      setPaymentMode("credit");
+                      // Discounts only apply to cash sales for now — clear
+                      // them rather than let a value sit there that looks
+                      // active but silently won't be applied.
+                      items.forEach((item) => {
+                        if (item.discount) updateDiscount(item.productId, 0);
+                      });
+                    }}
+                  >
+                    {t("creditSaleLabel")}
+                  </button>
+                </div>
+
+                {paymentMode === "cash" && (
+                  <>
+                    <div style={styles.accountChipRow}>
+                      {GENERIC_METHODS.map((m) => (
+                        <button
+                          key={m.value}
+                          style={{
+                            ...styles.accountChip,
+                            ...(receivedVia === m.value
+                              ? styles.accountChipActive
+                              : {}),
+                          }}
+                          onClick={() => setReceivedVia(m.value)}
+                        >
+                          {t(m.labelKey)}
+                        </button>
+                      ))}
+                      {paymentAccounts.map((acc) => (
+                        <button
+                          key={acc.id}
+                          style={{
+                            ...styles.accountChip,
+                            ...(receivedVia === acc.id
+                              ? styles.accountChipActive
+                              : {}),
+                          }}
+                          onClick={() => setReceivedVia(acc.id)}
+                        >
+                          {acc.label}
+                        </button>
+                      ))}
+                    </div>
+                    {paymentAccounts.length === 0 && (
+                      <div style={styles.accountHint}>
+                        {t("noPaymentAccountsHint")}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {paymentMode === "cash" && (
+                  <div style={styles.customerFields}>
+                    <input
+                      style={styles.customerInput}
+                      value={receiptName}
+                      onChange={(e) => setReceiptName(e.target.value)}
+                      placeholder={t("receiptNamePlaceholder")}
+                    />
+                    <input
+                      style={styles.customerInput}
+                      value={receiptPhone}
+                      onChange={(e) => setReceiptPhone(e.target.value)}
+                      placeholder={t("receiptPhonePlaceholder")}
+                    />
+                  </div>
+                )}
+
+                {paymentMode === "credit" && (
+                  <div style={styles.customerFields}>
+                    <input
+                      style={styles.customerInput}
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder={t("customerNamePlaceholder")}
+                    />
+                    <input
+                      style={styles.customerInput}
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder={t("customerPhonePlaceholder")}
+                    />
+                  </div>
+                )}
+
+                <div style={styles.totalRow}>
+                  <span
+                    style={{ fontWeight: 700, color: "var(--text-secondary)" }}
+                  >
+                    {t("tableTotal")}
+                  </span>
+                  <span
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 20,
+                      color: "var(--primary-dark)",
+                    }}
+                  >
+                    {formatTZS(totalAmount)}
+                  </span>
+                </div>
+              </>
+            )}
+          </>
         )}
 
         {items.length > 0 && (
-          <>
-            <div style={styles.modeRow}>
-              <button
-                style={{
-                  ...styles.modeBtn,
-                  ...(paymentMode === "cash" ? styles.modeBtnActive : {}),
-                }}
-                onClick={() => setPaymentMode("cash")}
-              >
-                {t("cashSaleLabel")}
-              </button>
-              <button
-                style={{
-                  ...styles.modeBtn,
-                  ...(paymentMode === "credit"
-                    ? styles.modeBtnActiveCredit
-                    : {}),
-                }}
-                onClick={() => setPaymentMode("credit")}
-              >
-                {t("creditSaleLabel")}
-              </button>
-            </div>
-
-            {paymentMode === "cash" && (
-              <>
-                <div style={styles.accountChipRow}>
-                  {GENERIC_METHODS.map((m) => (
-                    <button
-                      key={m.value}
-                      style={{
-                        ...styles.accountChip,
-                        ...(receivedVia === m.value
-                          ? styles.accountChipActive
-                          : {}),
-                      }}
-                      onClick={() => setReceivedVia(m.value)}
-                    >
-                      {t(m.labelKey)}
-                    </button>
-                  ))}
-                  {paymentAccounts.map((acc) => (
-                    <button
-                      key={acc.id}
-                      style={{
-                        ...styles.accountChip,
-                        ...(receivedVia === acc.id
-                          ? styles.accountChipActive
-                          : {}),
-                      }}
-                      onClick={() => setReceivedVia(acc.id)}
-                    >
-                      {acc.label}
-                    </button>
-                  ))}
-                </div>
-                {paymentAccounts.length === 0 && (
-                  <div style={styles.accountHint}>
-                    {t("noPaymentAccountsHint")}
-                  </div>
-                )}
-              </>
-            )}
-
-            {paymentMode === "cash" && (
-              <div style={styles.customerFields}>
-                <input
-                  style={styles.customerInput}
-                  value={receiptName}
-                  onChange={(e) => setReceiptName(e.target.value)}
-                  placeholder={t("receiptNamePlaceholder")}
-                />
-                <input
-                  style={styles.customerInput}
-                  value={receiptPhone}
-                  onChange={(e) => setReceiptPhone(e.target.value)}
-                  placeholder={t("receiptPhonePlaceholder")}
-                />
-              </div>
-            )}
-
-            {paymentMode === "credit" && (
-              <div style={styles.customerFields}>
-                <input
-                  style={styles.customerInput}
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder={t("customerNamePlaceholder")}
-                />
-                <input
-                  style={styles.customerInput}
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder={t("customerPhonePlaceholder")}
-                />
-              </div>
-            )}
-
-            <div style={styles.totalRow}>
-              <span style={{ fontWeight: 700, color: "var(--text-secondary)" }}>
-                {t("tableTotal")}
-              </span>
-              <span
-                style={{
-                  fontWeight: 800,
-                  fontSize: 20,
-                  color: "var(--primary-dark)",
-                }}
-              >
-                {formatTZS(totalAmount)}
-              </span>
-            </div>
+          <div style={styles.actions}>
+            <button
+              style={styles.backBtn}
+              onClick={step === 0 ? resetAndClose : goBack}
+            >
+              {step === 0 ? t("cancelButton") : t("backButton")}
+            </button>
             <button
               style={{
-                ...styles.completeBtn,
-                ...(paymentMode === "credit" ? styles.completeBtnCredit : {}),
+                ...styles.nextBtn,
+                ...(isLastStep && paymentMode === "credit"
+                  ? styles.nextBtnCredit
+                  : {}),
               }}
               disabled={completing}
-              onClick={handleComplete}
+              onClick={isLastStep ? handleComplete : goNext}
             >
               {completing
                 ? t("completing")
-                : paymentMode === "credit"
-                  ? t("completeCreditSaleButton")
-                  : t("completeSaleButton")}
+                : isLastStep
+                  ? paymentMode === "credit"
+                    ? t("completeCreditSaleButton")
+                    : t("completeSaleButton")
+                  : t("continueButton")}
             </button>
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -305,6 +434,35 @@ const styles = {
     fontSize: 16,
     color: "var(--text-secondary)",
   },
+  stepRow: { display: "flex", alignItems: "center", marginBottom: 8 },
+  stepDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 999,
+    background: "var(--border-muted)",
+    color: "var(--text-muted)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+  stepDotActive: { background: "var(--primary)", color: "white" },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    background: "var(--border-muted)",
+    margin: "0 4px",
+  },
+  stepLineActive: { background: "var(--primary)" },
+  stepIndicatorText: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "var(--text-muted)",
+    textAlign: "center",
+    marginBottom: 14,
+  },
   error: {
     background: "var(--danger-light)",
     color: "var(--danger)",
@@ -327,6 +485,7 @@ const styles = {
     alignItems: "center",
     padding: "14px 0",
     borderTop: "1px solid var(--border-muted)",
+    marginTop: 4,
     marginBottom: 14,
   },
   modeRow: { display: "flex", gap: 8, marginTop: 4, marginBottom: 12 },
@@ -396,7 +555,19 @@ const styles = {
     background: "var(--bg)",
     color: "var(--text-primary)",
   },
-  completeBtn: {
+  actions: { display: "flex", gap: 10, marginTop: 4 },
+  backBtn: {
+    flex: 1,
+    padding: 15,
+    borderRadius: 14,
+    border: "1.5px solid var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  nextBtn: {
+    flex: 1,
     padding: 15,
     borderRadius: 14,
     border: "none",
@@ -405,7 +576,7 @@ const styles = {
     fontWeight: 800,
     fontSize: 15,
   },
-  completeBtnCredit: { background: "#8A5A1E" },
+  nextBtnCredit: { background: "#8A5A1E" },
 };
 
 export default CartModal;

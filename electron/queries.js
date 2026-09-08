@@ -120,14 +120,15 @@ function getSales() {
       batchBreakdown: s.batch_breakdown ? JSON.parse(s.batch_breakdown) : null,
       customerPhone: s.customer_phone,
       customerName: s.customer_name,
+      discount: s.discount || 0,
     }));
 }
 
 const saveSales = db.transaction((sales) => {
   db.prepare("DELETE FROM sales").run();
   const insert = db.prepare(`
-    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, edited_at, batch_breakdown, customer_phone, customer_name)
-    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @editedAt, @breakdownJson, @customerPhone, @customerName)
+    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, edited_at, batch_breakdown, customer_phone, customer_name, discount)
+    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @editedAt, @breakdownJson, @customerPhone, @customerName, @discount)
   `);
   for (const s of sales) {
     insert.run({
@@ -149,6 +150,7 @@ const saveSales = db.transaction((sales) => {
       breakdownJson: s.batchBreakdown ? JSON.stringify(s.batchBreakdown) : null,
       customerPhone: s.customerPhone ?? null,
       customerName: s.customerName ?? null,
+      discount: s.discount ?? 0,
     });
   }
 });
@@ -1155,6 +1157,7 @@ const completeSaleTx = db.transaction(
     accountLabel,
     customerPhone,
     customerName,
+    discount,
   ) => {
     const product = db
       .prepare("SELECT * FROM products WHERE id = ?")
@@ -1205,7 +1208,14 @@ const completeSaleTx = db.transaction(
       "UPDATE products SET stock = ?, buying_price = ? WHERE id = ?",
     ).run(newStock, newBuyingPrice, productId);
 
-    const totalRevenue = sellingPrice * quantity;
+    // The discount comes straight out of what the customer actually paid
+    // — the cost of the goods sold doesn't change just because the price
+    // was negotiated down, so it comes straight out of profit too. If the
+    // discount exceeds the margin, profit genuinely goes negative here,
+    // which is correct: that's what actually happened, not something to
+    // hide by clamping at zero.
+    const appliedDiscount = discount || 0;
+    const totalRevenue = sellingPrice * quantity - appliedDiscount;
     const profit = totalRevenue - totalCost;
     const effectiveBuyingPrice = totalCost / quantity;
     const saleId = genId("s");
@@ -1214,8 +1224,8 @@ const completeSaleTx = db.transaction(
 
     db.prepare(
       `
-    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown, customer_phone, customer_name)
-    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdown, @customerPhone, @customerName)
+    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown, customer_phone, customer_name, discount)
+    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdown, @customerPhone, @customerName, @discount)
   `,
     ).run({
       id: saleId,
@@ -1235,6 +1245,7 @@ const completeSaleTx = db.transaction(
       breakdown: breakdownJson,
       customerPhone: customerPhone || null,
       customerName: customerName || null,
+      discount: appliedDiscount,
     });
 
     db.prepare(
@@ -1267,6 +1278,7 @@ const completeSaleTx = db.transaction(
       batchBreakdown: breakdown,
       customerPhone: customerPhone || null,
       customerName: customerName || null,
+      discount: appliedDiscount,
     };
   },
 );
@@ -1280,11 +1292,17 @@ function completeSale({
   accountLabel,
   customerPhone,
   customerName,
+  discount,
 }) {
   if (!quantity || quantity <= 0)
     return { success: false, error: "Weka kiasi sahihi" };
   if (!sellingPrice || sellingPrice <= 0)
     return { success: false, error: "Weka bei sahihi ya kuuza" };
+  const grossTotal = sellingPrice * quantity;
+  if (discount && discount < 0)
+    return { success: false, error: "Punguzo haliwezi kuwa hasi" };
+  if (discount && discount >= grossTotal)
+    return { success: false, error: "Punguzo haliwezi kuzidi bei ya jumla" };
 
   try {
     const sale = completeSaleTx(
@@ -1296,6 +1314,7 @@ function completeSale({
       accountLabel,
       customerPhone,
       customerName,
+      discount,
     );
     return { success: true, sale };
   } catch (err) {
@@ -1328,6 +1347,17 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
     if (!item.sellingPrice || item.sellingPrice <= 0) {
       throw new CartValidationError(
         `${item.productName}: weka bei sahihi ya kuuza`,
+      );
+    }
+    const itemDiscount = item.discount || 0;
+    if (itemDiscount < 0) {
+      throw new CartValidationError(
+        `${item.productName}: punguzo haliwezi kuwa hasi`,
+      );
+    }
+    if (itemDiscount >= item.sellingPrice * item.quantity) {
+      throw new CartValidationError(
+        `${item.productName}: punguzo haliwezi kuzidi bei ya jumla`,
       );
     }
 
@@ -1382,7 +1412,7 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
       "UPDATE products SET stock = ?, buying_price = ? WHERE id = ?",
     ).run(newStock, newBuyingPrice, item.productId);
 
-    const totalRevenue = item.sellingPrice * item.quantity;
+    const totalRevenue = item.sellingPrice * item.quantity - itemDiscount;
     const profit = totalRevenue - totalCost;
     const effectiveBuyingPrice = totalCost / item.quantity;
     const saleId = genId("s");
@@ -1390,8 +1420,8 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
 
     db.prepare(
       `
-      INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown, customer_phone, customer_name)
-      VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdownJson, @customerPhone, @customerName)
+      INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown, customer_phone, customer_name, discount)
+      VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdownJson, @customerPhone, @customerName, @discount)
     `,
     ).run({
       id: saleId,
@@ -1411,6 +1441,7 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
       breakdownJson: JSON.stringify(breakdown),
       customerPhone: meta.customerPhone || null,
       customerName: meta.customerName || null,
+      discount: itemDiscount,
     });
 
     saleRows.push({
@@ -1431,6 +1462,7 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
       batchBreakdown: breakdown,
       customerPhone: meta.customerPhone || null,
       customerName: meta.customerName || null,
+      discount: itemDiscount,
     });
   }
 
@@ -1639,6 +1671,127 @@ function completeCreditSale({ cartItems, customerName, customerPhone }) {
   }
 }
 
+// An order ticket, not a sale — recorded before the customer ever
+// reaches the cashier. order_number is computed as current-max-plus-one
+// and inserted in the same transaction, so two orders created back to
+// back can never collide on the same number, even though nothing here
+// depends on that race actually being possible in a single-device app.
+const createOrderTx = db.transaction(
+  (issuedBy, customerName, customerPhone, items) => {
+    const row = db.prepare("SELECT MAX(order_number) as m FROM orders").get();
+    const nextNumber = (row.m || 0) + 1;
+    const orderId = genId("ord");
+    const date = new Date().toISOString();
+
+    db.prepare(
+      `
+    INSERT INTO orders (id, order_number, issued_by, customer_name, customer_phone, status, date)
+    VALUES (?, ?, ?, ?, ?, 'pending', ?)
+  `,
+    ).run(
+      orderId,
+      nextNumber,
+      issuedBy || null,
+      customerName || null,
+      customerPhone || null,
+      date,
+    );
+
+    const insertItem = db.prepare(`
+    INSERT INTO order_items (id, order_id, product_id, product_name, quantity, expected_price)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+    for (const item of items) {
+      insertItem.run(
+        genId("oi"),
+        orderId,
+        item.productId,
+        item.productName,
+        item.quantity,
+        item.expectedPrice ?? null,
+      );
+    }
+
+    return { id: orderId, orderNumber: nextNumber };
+  },
+);
+
+function createOrder({ issuedBy, customerName, customerPhone, items }) {
+  if (!items || items.length === 0)
+    return { success: false, error: "Hakuna bidhaa kwenye oda" };
+  for (const item of items) {
+    if (!item.quantity || item.quantity <= 0) {
+      return {
+        success: false,
+        error: `${item.productName}: weka kiasi sahihi`,
+      };
+    }
+  }
+  const order = createOrderTx(issuedBy, customerName, customerPhone, items);
+  return { success: true, order };
+}
+
+function getOrders() {
+  const orders = db
+    .prepare("SELECT * FROM orders ORDER BY order_number DESC")
+    .all();
+  const items = db.prepare("SELECT * FROM order_items").all();
+  const itemsByOrder = {};
+  for (const i of items) {
+    (itemsByOrder[i.order_id] ||= []).push({
+      productId: i.product_id,
+      productName: i.product_name,
+      quantity: i.quantity,
+      expectedPrice: i.expected_price,
+    });
+  }
+  return orders.map((o) => ({
+    id: o.id,
+    orderNumber: o.order_number,
+    issuedBy: o.issued_by,
+    customerName: o.customer_name,
+    customerPhone: o.customer_phone,
+    status: o.status,
+    date: o.date,
+    fulfilledAt: o.fulfilled_at,
+    items: itemsByOrder[o.id] || [],
+  }));
+}
+
+// Fulfilling doesn't touch stock or create a sale itself — that already
+// happens through the normal cart-sale flow once the cashier loads the
+// order's items in. This just marks the order as settled and guards
+// against marking the same order fulfilled twice.
+function fulfillOrder(orderId) {
+  const order = db.prepare("SELECT * FROM orders WHERE id = ?").get(orderId);
+  if (!order) return { success: false, error: "Oda haipatikani" };
+  if (order.status !== "pending")
+    return {
+      success: false,
+      error: `Oda tayari ${order.status === "fulfilled" ? "imekamilika" : "imefutwa"}`,
+    };
+
+  db.prepare(
+    `UPDATE orders SET status = 'fulfilled', fulfilled_at = ? WHERE id = ?`,
+  ).run(new Date().toISOString(), orderId);
+  return { success: true };
+}
+
+function cancelOrder(orderId) {
+  const order = db.prepare("SELECT * FROM orders WHERE id = ?").get(orderId);
+  if (!order) return { success: false, error: "Oda haipatikani" };
+  if (order.status !== "pending")
+    return {
+      success: false,
+      error: `Oda tayari ${order.status === "fulfilled" ? "imekamilika" : "imefutwa"}`,
+    };
+
+  db.prepare(`UPDATE orders SET status = 'cancelled' WHERE id = ?`).run(
+    orderId,
+  );
+  return { success: true };
+}
+
 module.exports = {
   getProducts,
   saveProducts,
@@ -1675,4 +1828,8 @@ module.exports = {
   deleteSale,
   recordCreditPayment,
   deleteCreditSale,
+  createOrder,
+  getOrders,
+  fulfillOrder,
+  cancelOrder,
 };

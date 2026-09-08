@@ -36,6 +36,7 @@ const Sidebar = ({
     { key: "dashboard", label: t("navDashboard") },
     { key: "products", label: t("navProducts") },
     { key: "sales", label: t("navSales") },
+    { key: "orders", label: t("navOrders") },
     { key: "credit", label: t("navCredit") },
     { key: "customers", label: t("navCustomers") },
     { key: "expenses", label: t("navExpenses") },

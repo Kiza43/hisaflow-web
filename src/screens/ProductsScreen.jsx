@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { dataService } from "../services/dataService";
 import ProductFormModal from "../components/ProductFormModal.jsx";
+import ImportProductsModal from "../components/ImportProductsModal.jsx";
 import ProductCard from "../components/ProductCard.jsx";
 import SaleFormModal from "../components/SaleFormModal.jsx";
 import CartBar from "../components/CartBar.jsx";
@@ -54,6 +55,7 @@ const ProductsScreen = ({ initialFilter }) => {
   const [notifyBuyersProduct, setNotifyBuyersProduct] = useState(null);
   const [viewingBatchesProduct, setViewingBatchesProduct] = useState(null);
   const [loadingSample, setLoadingSample] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const { addToCart } = useCart();
   const { addToRestockCart } = useRestockCart();
 
@@ -289,6 +291,9 @@ const ProductsScreen = ({ initialFilter }) => {
           <button style={styles.posterBtn} onClick={() => setShowPoster(true)}>
             {t("createPosterButton")}
           </button>
+          <button style={styles.posterBtn} onClick={() => setShowImport(true)}>
+            {t("importFromExcelButton")}
+          </button>
           <button
             style={styles.addBtn}
             onClick={() => {
@@ -460,6 +465,13 @@ const ProductsScreen = ({ initialFilter }) => {
           setShowForm(false);
           setEditingProduct(null);
         }}
+      />
+
+      <ImportProductsModal
+        visible={showImport}
+        existingProducts={products}
+        onImported={loadProducts}
+        onClose={() => setShowImport(false)}
       />
 
       <SaleFormModal

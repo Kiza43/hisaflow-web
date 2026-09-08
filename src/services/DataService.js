@@ -58,6 +58,11 @@ export const dataService = {
   deleteCreditSale: (creditSaleId) =>
     window.hisaflow.deleteCreditSale(creditSaleId),
 
+  createOrder: (args) => window.hisaflow.createOrder(args),
+  getOrders: () => window.hisaflow.getOrders(),
+  fulfillOrder: (orderId) => window.hisaflow.fulfillOrder(orderId),
+  cancelOrder: (orderId) => window.hisaflow.cancelOrder(orderId),
+
   getLicenseStatus: () => window.hisaflow.getLicenseStatus(),
   activateLicense: (key) => window.hisaflow.activateLicense(key),
 

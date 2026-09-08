@@ -75,6 +75,11 @@ contextBridge.exposeInMainWorld("hisaflow", {
   deleteCreditSale: (creditSaleId) =>
     ipcRenderer.invoke("credit:deleteCreditSale", creditSaleId),
 
+  createOrder: (args) => ipcRenderer.invoke("orders:createOrder", args),
+  getOrders: () => ipcRenderer.invoke("orders:getOrders"),
+  fulfillOrder: (orderId) => ipcRenderer.invoke("orders:fulfillOrder", orderId),
+  cancelOrder: (orderId) => ipcRenderer.invoke("orders:cancelOrder", orderId),
+
   getLicenseStatus: () => ipcRenderer.invoke("license:getStatus"),
   activateLicense: (key) => ipcRenderer.invoke("license:activate", key),
 
