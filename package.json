@@ -1,6 +1,6 @@
 {
   "name": "hisaflow-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "HisaFlow desktop app - offline-capable, syncs when connected",
   "main": "electron/main.js",
@@ -19,7 +19,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.2.0",
+    "@electron/rebuild": "^3.7.1",
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
@@ -40,6 +40,9 @@
     ],
     "directories": {
       "output": "release"
+    },
+    "win": {
+      "icon": "build/icon.ico"
     }
   }
 }
