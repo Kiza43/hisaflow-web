@@ -16,10 +16,23 @@ const formatDate = (iso) => {
   });
 };
 
+const paymentMethodLabel = (method, t) => {
+  if (method === "cash") return t("cashMethodOption");
+  if (method === "bank_transfer") return t("bankTransferMethodOption");
+  if (method === "lipa_namba") return t("lipaNambaMethodOption");
+  return "";
+};
+
 const SaleCard = ({ sale, onEdit, onDelete }) => {
   const { t } = useLanguage();
   const profit = sale.profit || 0;
   const isProfit = profit >= 0;
+  // The specific account (e.g. "CRDB Business") when the sale was
+  // received into one — falls back to the generic method label ("Bank
+  // Transfer") for a sale recorded as cash, or before accounts existed.
+  const paidVia = sale.accountLabel
+    ? `${sale.accountLabel}${sale.accountNumber ? ` · ${sale.accountNumber}` : ""}`
+    : paymentMethodLabel(sale.paymentMethod, t);
 
   return (
     <div className="hf-card" style={styles.card}>
@@ -69,6 +82,12 @@ const SaleCard = ({ sale, onEdit, onDelete }) => {
             <span style={{ ...styles.rowValue, color: "var(--danger)" }}>
               −{formatTZS(sale.discount)}
             </span>
+          </div>
+        )}
+        {paidVia && (
+          <div style={styles.row}>
+            <span style={styles.rowLabel}>{t("receivedViaLabel")}</span>
+            <span style={styles.rowValue}>{paidVia}</span>
           </div>
         )}
       </div>

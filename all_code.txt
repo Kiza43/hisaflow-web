@@ -57,7 +57,10 @@ function initSchema() {
       date TEXT NOT NULL,
       supplier_id TEXT,
       supplier_name TEXT,
-      payment_method TEXT
+      payment_method TEXT,
+      account_id TEXT,
+      account_label TEXT,
+      account_number TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_batches_product ON stock_batches(product_id);
     CREATE INDEX IF NOT EXISTS idx_batches_date ON stock_batches(date);
@@ -75,6 +78,7 @@ function initSchema() {
       payment_method TEXT,
       account_id TEXT,
       account_label TEXT,
+      account_number TEXT,
       notes TEXT,
       date TEXT NOT NULL,
       edited_at TEXT,
@@ -246,6 +250,17 @@ addColumnIfMissing("products", "created_at", "TEXT");
 addColumnIfMissing("sales", "customer_phone", "TEXT");
 addColumnIfMissing("sales", "customer_name", "TEXT");
 addColumnIfMissing("sales", "discount", "REAL NOT NULL DEFAULT 0");
+// Which specific configured payment account (not just "bank transfer" as a
+// generic category) a restock was actually paid from — same idea as
+// sales.account_id/account_label, so a batch can show "CRDB Business"
+// instead of just "Bank Transfer" on the batch card.
+addColumnIfMissing("stock_batches", "account_id", "TEXT");
+addColumnIfMissing("stock_batches", "account_label", "TEXT");
+// The account number itself (e.g. "0123456789"), alongside the label
+// ("CRDB Business") already recorded above — so a batch or sale can
+// show both, the same as the account picker does when it's selected.
+addColumnIfMissing("stock_batches", "account_number", "TEXT");
+addColumnIfMissing("sales", "account_number", "TEXT");
 
 // Existing products from before this fix have no created_at recorded.
 // Backfilling with each product's earliest stock batch date is a
@@ -974,6 +989,9 @@ const batchRowToObject = (b) => ({
   supplierId: b.supplier_id,
   supplierName: b.supplier_name,
   paymentMethod: b.payment_method,
+  accountId: b.account_id,
+  accountLabel: b.account_label,
+  accountNumber: b.account_number,
 });
 
 function getProducts() {
@@ -997,8 +1015,8 @@ const saveProducts = db.transaction((products) => {
     VALUES (@id, @name, @category, @brand, @unit, @sellingPrice, @buyingPrice, @stock, @imageUri, @expiryDate, @createdAt)
   `);
   const insertBatch = db.prepare(`
-    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method)
-    VALUES (@id, @productId, @quantity, @remaining, @buyingPrice, @date, @supplierId, @supplierName, @paymentMethod)
+    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method, account_id, account_label, account_number)
+    VALUES (@id, @productId, @quantity, @remaining, @buyingPrice, @date, @supplierId, @supplierName, @paymentMethod, @accountId, @accountLabel, @accountNumber)
   `);
 
   for (const p of products) {
@@ -1026,6 +1044,9 @@ const saveProducts = db.transaction((products) => {
         supplierId: b.supplierId ?? null,
         supplierName: b.supplierName ?? null,
         paymentMethod: b.paymentMethod ?? null,
+        accountId: b.accountId ?? null,
+        accountLabel: b.accountLabel ?? null,
+        accountNumber: b.accountNumber ?? null,
       });
     }
   }
@@ -1048,6 +1069,7 @@ function getSales() {
       paymentMethod: s.payment_method,
       accountId: s.account_id,
       accountLabel: s.account_label,
+      accountNumber: s.account_number,
       notes: s.notes,
       date: s.date,
       editedAt: s.edited_at,
@@ -1064,8 +1086,8 @@ function getSales() {
 const saveSales = db.transaction((sales) => {
   db.prepare("DELETE FROM sales").run();
   const insert = db.prepare(`
-    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, edited_at, batch_breakdown, customer_phone, customer_name, discount)
-    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @editedAt, @breakdownJson, @customerPhone, @customerName, @discount)
+    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, account_number, notes, date, edited_at, batch_breakdown, customer_phone, customer_name, discount)
+    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @accountNumber, @notes, @date, @editedAt, @breakdownJson, @customerPhone, @customerName, @discount)
   `);
   for (const s of sales) {
     insert.run({
@@ -1081,6 +1103,7 @@ const saveSales = db.transaction((sales) => {
       paymentMethod: s.paymentMethod ?? null,
       accountId: s.accountId ?? null,
       accountLabel: s.accountLabel ?? null,
+      accountNumber: s.accountNumber ?? null,
       notes: s.notes ?? null,
       date: s.date,
       editedAt: s.editedAt ?? null,
@@ -1493,6 +1516,9 @@ const addStockTx = db.transaction(
     supplierId,
     supplierName,
     paymentMethod,
+    accountId,
+    accountLabel,
+    accountNumber,
   ) => {
     const product = db
       .prepare("SELECT * FROM products WHERE id = ?")
@@ -1502,8 +1528,8 @@ const addStockTx = db.transaction(
     const date = new Date().toISOString();
     db.prepare(
       `
-    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method, account_id, account_label, account_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
     ).run(
       genId("b"),
@@ -1515,15 +1541,21 @@ const addStockTx = db.transaction(
       supplierId || null,
       supplierName || null,
       paymentMethod || null,
+      accountId || null,
+      accountLabel || null,
+      accountNumber || null,
     );
 
     recomputeProductSummary(productId);
 
+    // Show exactly which account paid for it, when one was picked — not
+    // just "added stock", the same specificity accountLabel gives sales.
+    const paidViaSuffix = accountLabel ? ` — ${accountLabel}` : "";
     db.prepare(
       `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'added stock', ?, NULL, ?)`,
     ).run(
       genId("al"),
-      `${product.name} +${quantity} @ TZS ${Math.round(buyingPrice).toLocaleString("en-US")}`,
+      `${product.name} +${quantity} @ TZS ${Math.round(buyingPrice).toLocaleString("en-US")}${paidViaSuffix}`,
       date,
     );
   },
@@ -1536,6 +1568,9 @@ function addStock({
   supplierId,
   supplierName,
   paymentMethod,
+  accountId,
+  accountLabel,
+  accountNumber,
 }) {
   if (!quantity || quantity <= 0)
     return { success: false, error: "Weka kiasi sahihi" };
@@ -1549,6 +1584,9 @@ function addStock({
       supplierId,
       supplierName,
       paymentMethod,
+      accountId,
+      accountLabel,
+      accountNumber,
     );
     return { success: true };
   } catch (err) {
@@ -1578,8 +1616,8 @@ const completeRestockCartTx = db.transaction((cartItems, meta) => {
 
   const date = new Date().toISOString();
   const insertBatch = db.prepare(`
-    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method, account_id, account_label, account_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const item of cartItems) {
@@ -1593,13 +1631,17 @@ const completeRestockCartTx = db.transaction((cartItems, meta) => {
       meta.supplierId || null,
       meta.supplierName || null,
       meta.paymentMethod || null,
+      meta.accountId || null,
+      meta.accountLabel || null,
+      meta.accountNumber || null,
     );
     recomputeProductSummary(item.productId);
   }
 
+  const paidViaSuffix = meta.accountLabel ? ` — ${meta.accountLabel}` : "";
   db.prepare(
     `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'restocked multiple products', ?, NULL, ?)`,
-  ).run(genId("al"), `${cartItems.length} bidhaa`, date);
+  ).run(genId("al"), `${cartItems.length} bidhaa${paidViaSuffix}`, date);
 });
 
 function completeRestockCart(cartItems, meta = {}) {
@@ -2092,6 +2134,7 @@ const completeSaleTx = db.transaction(
     paymentMethod,
     accountId,
     accountLabel,
+    accountNumber,
     customerPhone,
     customerName,
     discount,
@@ -2161,8 +2204,8 @@ const completeSaleTx = db.transaction(
 
     db.prepare(
       `
-    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown, customer_phone, customer_name, discount)
-    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdown, @customerPhone, @customerName, @discount)
+    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, account_number, notes, date, batch_breakdown, customer_phone, customer_name, discount)
+    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @accountNumber, @notes, @date, @breakdown, @customerPhone, @customerName, @discount)
   `,
     ).run({
       id: saleId,
@@ -2177,6 +2220,7 @@ const completeSaleTx = db.transaction(
       paymentMethod: paymentMethod || "cash",
       accountId: accountId || null,
       accountLabel: accountLabel || null,
+      accountNumber: accountNumber || null,
       notes: "",
       date,
       breakdown: breakdownJson,
@@ -2209,6 +2253,7 @@ const completeSaleTx = db.transaction(
       paymentMethod: paymentMethod || "cash",
       accountId: accountId || null,
       accountLabel: accountLabel || null,
+      accountNumber: accountNumber || null,
       notes: "",
       date,
       editedAt: null,
@@ -2227,6 +2272,7 @@ function completeSale({
   paymentMethod,
   accountId,
   accountLabel,
+  accountNumber,
   customerPhone,
   customerName,
   discount,
@@ -2249,6 +2295,7 @@ function completeSale({
       paymentMethod,
       accountId,
       accountLabel,
+      accountNumber,
       customerPhone,
       customerName,
       discount,
@@ -2357,8 +2404,8 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
 
     db.prepare(
       `
-      INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown, customer_phone, customer_name, discount)
-      VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdownJson, @customerPhone, @customerName, @discount)
+      INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, account_number, notes, date, batch_breakdown, customer_phone, customer_name, discount)
+      VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @accountNumber, @notes, @date, @breakdownJson, @customerPhone, @customerName, @discount)
     `,
     ).run({
       id: saleId,
@@ -2373,6 +2420,7 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
       paymentMethod: meta.paymentMethod || "cash",
       accountId: meta.accountId || null,
       accountLabel: meta.accountLabel || "",
+      accountNumber: meta.accountNumber || "",
       notes: "",
       date,
       breakdownJson: JSON.stringify(breakdown),
@@ -2394,6 +2442,7 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
       paymentMethod: meta.paymentMethod || "cash",
       accountId: meta.accountId || null,
       accountLabel: meta.accountLabel || "",
+      accountNumber: meta.accountNumber || "",
       notes: "",
       date,
       batchBreakdown: breakdown,
@@ -10163,7 +10212,7 @@ module.exports = { store, DATA_DIR };
 ===== ./package.json =====
 {
   "name": "hisaflow-desktop",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "HisaFlow desktop app - offline-capable, syncs when connected",
   "main": "electron/main.js",
@@ -181041,6 +181090,9 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
   const [supplierId, setSupplierId] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState("paid");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [accountId, setAccountId] = useState(null);
+  const [accountLabel, setAccountLabel] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -181054,6 +181106,9 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
       setSupplierId(null);
       setPaymentStatus("paid");
       setPaymentMethod("cash");
+      setAccountId(null);
+      setAccountLabel("");
+      setAccountNumber("");
       setError("");
       setSaving(false);
     }
@@ -181078,6 +181133,9 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
         supplierId: supplierId || null,
         supplierName: selectedSupplier?.name || "",
         paymentMethod: paymentStatus === "paid" ? paymentMethod : "",
+        accountId: paymentStatus === "paid" ? accountId : null,
+        accountLabel: paymentStatus === "paid" ? accountLabel : "",
+        accountNumber: paymentStatus === "paid" ? accountNumber : "",
       });
       if (result && result.success === false) {
         setError(result.error);
@@ -181134,6 +181192,12 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
           onPaymentStatusChange={setPaymentStatus}
           paymentMethod={paymentMethod}
           onPaymentMethodChange={setPaymentMethod}
+          accountId={accountId}
+          onAccountChange={(id, label, number) => {
+            setAccountId(id);
+            setAccountLabel(label);
+            setAccountNumber(number || "");
+          }}
         />
 
         <div style={styles.actions}>
@@ -181297,7 +181361,15 @@ const BatchCard = ({ batch, index, isOldestActive }) => {
           )}
           {batch.supplierName && batch.paymentMethod && " · "}
           {batch.paymentMethod && (
-            <span>{paymentMethodLabel(batch.paymentMethod, t)}</span>
+            // The specific account (e.g. "CRDB Business") when one was
+            // picked at restock time — falls back to the generic method
+            // label ("Bank Transfer") for batches recorded before this,
+            // or restocks where no specific account was chosen.
+            <span>
+              {batch.accountLabel
+                ? `${batch.accountLabel}${batch.accountNumber ? ` · ${batch.accountNumber}` : ""}`
+                : paymentMethodLabel(batch.paymentMethod, t)}
+            </span>
           )}
         </div>
       )}
@@ -181466,8 +181538,6 @@ const BatchListModal = ({ visible, product, onClose }) => {
             ))
           )}
         </div>
-
-        <div style={styles.explainerBox}>{t("fifoExplainer")}</div>
       </div>
     </div>
   );
@@ -181527,15 +181597,6 @@ const styles = {
     color: "var(--text-muted)",
     textAlign: "center",
     padding: "24px 0",
-  },
-  explainerBox: {
-    fontSize: 12,
-    color: "var(--primary-dark)",
-    textAlign: "center",
-    background: "var(--primary-light)",
-    borderRadius: 12,
-    padding: 12,
-    lineHeight: 1.5,
   },
 };
 
@@ -181939,6 +182000,8 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
         paymentMode === "cash" ? selectedAccount?.id || null : null;
       const accountLabel =
         paymentMode === "cash" ? selectedAccount?.label || "" : "";
+      const accountNumber =
+        paymentMode === "cash" ? selectedAccount?.accountNumber || "" : "";
 
       const result =
         paymentMode === "credit"
@@ -181951,6 +182014,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
               paymentMethod,
               accountId,
               accountLabel,
+              accountNumber,
               customerPhone: receiptPhone.trim() || undefined,
               customerName: receiptName.trim() || undefined,
             });
@@ -181971,6 +182035,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
         isCredit: paymentMode === "credit",
         paymentMethod,
         accountLabel,
+        accountNumber,
         customerName,
         customerPhone,
         date: new Date().toISOString(),
@@ -182126,6 +182191,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
                           onClick={() => setReceivedVia(acc.id)}
                         >
                           {acc.label}
+                          {acc.accountNumber ? ` · ${acc.accountNumber}` : ""}
                         </button>
                       ))}
                     </div>
@@ -182674,20 +182740,15 @@ import { blockInvalidNumberKeys } from "../utils/numberInput";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 // Writes up an order ticket for a customer before they reach the
-// cashier — issuedBy comes from whoever is actually logged in right
-// now, not a free-text field, since the point of this feature is real
-// accountability for who promised what.
-const CreateOrderModal = ({
-  visible,
-  products,
-  currentUser,
-  onCreate,
-  onClose,
-}) => {
+// cashier. issuedBy is a plain free-text field — whoever is physically
+// writing up the order types their own name, so the owner's wife or
+// sibling can issue an order without needing their own staff login.
+const CreateOrderModal = ({ visible, products, onCreate, onClose }) => {
   const { t } = useLanguage();
   const [items, setItems] = useState([]);
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
+  const [issuedBy, setIssuedBy] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [error, setError] = useState("");
@@ -182736,6 +182797,7 @@ const CreateOrderModal = ({
     setItems([]);
     setProductId("");
     setQuantity("1");
+    setIssuedBy("");
     setCustomerName("");
     setCustomerPhone("");
     setError("");
@@ -182748,11 +182810,15 @@ const CreateOrderModal = ({
       setError(t("addAtLeastOneItemError"));
       return;
     }
+    if (!issuedBy.trim()) {
+      setError(t("issuedByRequiredError"));
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       const result = await onCreate({
-        issuedBy: currentUser?.name || "",
+        issuedBy: issuedBy.trim(),
         customerName: customerName.trim() || null,
         customerPhone: customerPhone.trim() || null,
         items,
@@ -182827,6 +182893,14 @@ const CreateOrderModal = ({
             </div>
           </div>
         )}
+
+        <label style={styles.label}>{t("issuedByLabel")}</label>
+        <input
+          style={styles.input}
+          value={issuedBy}
+          onChange={(e) => setIssuedBy(e.target.value)}
+          placeholder={t("issuedByPlaceholder")}
+        />
 
         <label style={styles.label}>{t("customerNameOptionalLabel")}</label>
         <input
@@ -187763,13 +187837,17 @@ const formatDateTime = (iso) => {
   );
 };
 
-const paymentMethodDisplay = (method, accountLabel, t) => {
+const paymentMethodDisplay = (method, accountLabel, accountNumber, t) => {
   if (method === "cash") return t("cashMethodOption");
   const methodLabel =
     method === "bank_transfer"
       ? t("bankTransferMethodOption")
       : t("lipaNambaMethodOption");
-  return accountLabel ? `${methodLabel} — ${accountLabel}` : methodLabel;
+  if (!accountLabel) return methodLabel;
+  const accountPart = accountNumber
+    ? `${accountLabel} · ${accountNumber}`
+    : accountLabel;
+  return `${methodLabel} — ${accountPart}`;
 };
 
 // sale = { items: [{productName, quantity, sellingPrice}], total, customerName?, customerPhone?, isCredit?, date }
@@ -187861,7 +187939,12 @@ const ReceiptModal = ({ visible, sale, settings, onClose }) => {
 
           {!sale.isCredit && sale.paymentMethod && (
             <div style={styles.methodLine}>
-              {paymentMethodDisplay(sale.paymentMethod, sale.accountLabel, t)}
+              {paymentMethodDisplay(
+                sale.paymentMethod,
+                sale.accountLabel,
+                sale.accountNumber,
+                t,
+              )}
             </div>
           )}
 
@@ -188887,6 +188970,9 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
   const [supplierId, setSupplierId] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("paid");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [accountId, setAccountId] = useState(null);
+  const [accountLabel, setAccountLabel] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState("");
 
@@ -188905,6 +188991,9 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
         supplierId: supplierId || null,
         supplierName: selectedSupplier?.name || "",
         paymentMethod: paymentStatus === "paid" ? paymentMethod : "",
+        accountId: paymentStatus === "paid" ? accountId : null,
+        accountLabel: paymentStatus === "paid" ? accountLabel : "",
+        accountNumber: paymentStatus === "paid" ? accountNumber : "",
       });
 
       if (!result.success) {
@@ -188920,6 +189009,8 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
       setSupplierId("");
       setPaymentStatus("paid");
       setPaymentMethod("cash");
+      setAccountId(null);
+      setAccountLabel("");
       onCompleted();
     } catch (err) {
       console.error("Restock completion error:", err);
@@ -188968,6 +189059,12 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
               onPaymentStatusChange={setPaymentStatus}
               paymentMethod={paymentMethod}
               onPaymentMethodChange={setPaymentMethod}
+              accountId={accountId}
+              onAccountChange={(id, label, number) => {
+                setAccountId(id);
+                setAccountLabel(label);
+                setAccountNumber(number || "");
+              }}
             />
           </div>
         )}
@@ -189085,10 +189182,23 @@ const formatDate = (iso) => {
   });
 };
 
+const paymentMethodLabel = (method, t) => {
+  if (method === "cash") return t("cashMethodOption");
+  if (method === "bank_transfer") return t("bankTransferMethodOption");
+  if (method === "lipa_namba") return t("lipaNambaMethodOption");
+  return "";
+};
+
 const SaleCard = ({ sale, onEdit, onDelete }) => {
   const { t } = useLanguage();
   const profit = sale.profit || 0;
   const isProfit = profit >= 0;
+  // The specific account (e.g. "CRDB Business") when the sale was
+  // received into one — falls back to the generic method label ("Bank
+  // Transfer") for a sale recorded as cash, or before accounts existed.
+  const paidVia = sale.accountLabel
+    ? `${sale.accountLabel}${sale.accountNumber ? ` · ${sale.accountNumber}` : ""}`
+    : paymentMethodLabel(sale.paymentMethod, t);
 
   return (
     <div className="hf-card" style={styles.card}>
@@ -189138,6 +189248,12 @@ const SaleCard = ({ sale, onEdit, onDelete }) => {
             <span style={{ ...styles.rowValue, color: "var(--danger)" }}>
               −{formatTZS(sale.discount)}
             </span>
+          </div>
+        )}
+        {paidVia && (
+          <div style={styles.row}>
+            <span style={styles.rowLabel}>{t("receivedViaLabel")}</span>
+            <span style={styles.rowValue}>{paidVia}</span>
           </div>
         )}
       </div>
@@ -189344,6 +189460,8 @@ const SaleFormModal = ({
         paymentMode === "cash" ? selectedAccount?.id || null : null;
       const accountLabel =
         paymentMode === "cash" ? selectedAccount?.label || "" : "";
+      const accountNumber =
+        paymentMode === "cash" ? selectedAccount?.accountNumber || "" : "";
 
       const result =
         paymentMode === "credit"
@@ -189359,6 +189477,7 @@ const SaleFormModal = ({
               paymentMethod,
               accountId,
               accountLabel,
+              accountNumber,
               customerPhone: receiptPhone.trim() || undefined,
               customerName: receiptName.trim() || undefined,
               discount: discountNum || undefined,
@@ -189383,6 +189502,7 @@ const SaleFormModal = ({
         isCredit: paymentMode === "credit",
         paymentMethod,
         accountLabel,
+        accountNumber,
         customerName,
         customerPhone,
         date: new Date().toISOString(),
@@ -189522,6 +189642,7 @@ const SaleFormModal = ({
                   onClick={() => setReceivedVia(acc.id)}
                 >
                   {acc.label}
+                  {acc.accountNumber ? ` · ${acc.accountNumber}` : ""}
                 </button>
               ))}
             </div>
@@ -190693,12 +190814,17 @@ export default SupplierFormModal;
 
 
 ===== ./src/components/SupplierPaymentSection.jsx =====
-import React from "react";
+import React, { useState, useEffect } from "react";
 import SupplierPicker from "./SupplierPicker.jsx";
+import { dataService } from "../services/dataService";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 // Cash, bank transfer, or Lipa Namba — the three ways shop owners
-// actually pay suppliers, per direct customer feedback.
+// actually pay suppliers, per direct customer feedback. Specifically
+// named accounts (configured in Settings) appear as additional, more
+// precise chips right alongside these, for shops that want to record
+// exactly which bank account the money left from — same pattern as
+// "Received Via" on a sale.
 const PAYMENT_METHODS = [
   { value: "cash", labelKey: "cashMethodOption" },
   { value: "bank_transfer", labelKey: "bankTransferMethodOption" },
@@ -190714,6 +190840,13 @@ const PAYMENT_METHODS = [
 // whether or not a formal supplier record exists for a one-off
 // purchase. That's the one rule this component exists to enforce in
 // exactly one place, so it can't quietly regress a fourth time.
+//
+// accountId/onAccountChange are optional and controlled the same way as
+// paymentMethod — when a specific account chip is picked, this fires
+// both onPaymentMethodChange (with that account's type, for
+// filtering/reporting) and onAccountChange (with its id and label), so
+// the caller ends up with the same {paymentMethod, accountId,
+// accountLabel} shape completeSale already produces for a cash sale.
 const SupplierPaymentSection = ({
   suppliers,
   onSuppliersChange,
@@ -190723,8 +190856,27 @@ const SupplierPaymentSection = ({
   onPaymentStatusChange,
   paymentMethod,
   onPaymentMethodChange,
+  accountId,
+  onAccountChange,
 }) => {
   const { t } = useLanguage();
+  const [paymentAccounts, setPaymentAccounts] = useState([]);
+
+  useEffect(() => {
+    dataService
+      .getSettings()
+      .then((s) => setPaymentAccounts(s.paymentAccounts || []));
+  }, []);
+
+  const handleSelectGenericMethod = (value) => {
+    onPaymentMethodChange(value);
+    onAccountChange?.(null, "", "");
+  };
+
+  const handleSelectAccount = (account) => {
+    onPaymentMethodChange(account.type);
+    onAccountChange?.(account.id, account.label, account.accountNumber || "");
+  };
 
   return (
     <>
@@ -190766,21 +190918,39 @@ const SupplierPaymentSection = ({
 
       {(!supplierId || paymentStatus === "paid") && (
         <>
-          <label style={styles.label}>{t("paymentMethodLabel")}</label>
+          <label style={styles.label}>{t("paidViaLabel")}</label>
           <div style={styles.methodRow}>
             {PAYMENT_METHODS.map((m) => (
               <button
                 key={m.value}
                 style={{
                   ...styles.methodChip,
-                  ...(paymentMethod === m.value ? styles.methodChipActive : {}),
+                  ...(paymentMethod === m.value && !accountId
+                    ? styles.methodChipActive
+                    : {}),
                 }}
-                onClick={() => onPaymentMethodChange(m.value)}
+                onClick={() => handleSelectGenericMethod(m.value)}
               >
                 {t(m.labelKey)}
               </button>
             ))}
+            {paymentAccounts.map((acc) => (
+              <button
+                key={acc.id}
+                style={{
+                  ...styles.methodChip,
+                  ...(accountId === acc.id ? styles.methodChipActive : {}),
+                }}
+                onClick={() => handleSelectAccount(acc)}
+              >
+                {acc.label}
+                {acc.accountNumber ? ` · ${acc.accountNumber}` : ""}
+              </button>
+            ))}
           </div>
+          {paymentAccounts.length === 0 && (
+            <div style={styles.accountHint}>{t("noPaymentAccountsHint")}</div>
+          )}
         </>
       )}
     </>
@@ -190818,10 +190988,21 @@ const styles = {
     borderColor: "var(--danger)",
     color: "var(--danger)",
   },
-  methodRow: { display: "flex", gap: 6, marginBottom: 14, marginTop: 8 },
+  methodRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 14,
+    marginTop: 8,
+  },
+  accountHint: {
+    fontSize: 11,
+    color: "var(--text-muted)",
+    marginTop: -8,
+    marginBottom: 14,
+  },
   methodChip: {
-    flex: 1,
-    padding: "8px 0",
+    padding: "8px 12px",
     borderRadius: 10,
     borderWidth: "1.5px",
     borderStyle: "solid",
@@ -191864,8 +192045,6 @@ const translations = {
     averagePriceLabel: "Bei ya Wastani",
     activeBatchesLabel: "Vikundi Vinavyotumika",
     noBatchesYet: "Hakuna vikundi vya stoo bado",
-    fifoExplainer:
-      "Bidhaa zinauzwa kutoka kikundi cha zamani zaidi kwanza (FIFO) — hii ndiyo inayohakikisha faida inaonyesha bei halisi uliyonunulia kila kundi.",
     currentlyUsingFifo: "Kinatumika Sasa",
     batchNumberLabel: "Kundi #{n}",
     depletedLabel: "Limekwisha",
@@ -191944,6 +192123,7 @@ const translations = {
     enterAccountLabelError: "Weka jina la akaunti",
     enterAccountNumberError: "Weka namba ya akaunti",
     receivedViaLabel: "Ilipokelewa Kupitia",
+    paidViaLabel: "Ilipwa Kupitia",
     noPaymentAccountsHint:
       "Kidokezo: ongeza majina ya akaunti zako mahususi kwenye Mipangilio kwa maelezo zaidi",
     notifyPastBuyersTitle: "Wajulishe Wateja Waliokwisha Nunua",
@@ -192381,8 +192561,6 @@ const translations = {
     averagePriceLabel: "Average Price",
     activeBatchesLabel: "Active Batches",
     noBatchesYet: "No stock batches yet",
-    fifoExplainer:
-      "Products sell from the oldest batch first (FIFO) — this is what keeps profit reflecting the real price paid for each delivery.",
     currentlyUsingFifo: "Currently Selling From",
     batchNumberLabel: "Batch #{n}",
     depletedLabel: "Depleted",
@@ -192460,6 +192638,7 @@ const translations = {
     enterAccountLabelError: "Enter the account name",
     enterAccountNumberError: "Enter the account number",
     receivedViaLabel: "Received Via",
+    paidViaLabel: "Paid Via",
     noPaymentAccountsHint:
       "Tip: add your specific account names in Settings for more detail",
     notifyPastBuyersTitle: "Notify Past Buyers",

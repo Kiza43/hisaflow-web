@@ -70,8 +70,6 @@ const BatchListModal = ({ visible, product, onClose }) => {
             ))
           )}
         </div>
-
-        <div style={styles.explainerBox}>{t("fifoExplainer")}</div>
       </div>
     </div>
   );
@@ -131,15 +129,6 @@ const styles = {
     color: "var(--text-muted)",
     textAlign: "center",
     padding: "24px 0",
-  },
-  explainerBox: {
-    fontSize: 12,
-    color: "var(--primary-dark)",
-    textAlign: "center",
-    background: "var(--primary-light)",
-    borderRadius: 12,
-    padding: 12,
-    lineHeight: 1.5,
   },
 };
 

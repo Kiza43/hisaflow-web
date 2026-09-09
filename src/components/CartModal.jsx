@@ -95,6 +95,8 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
         paymentMode === "cash" ? selectedAccount?.id || null : null;
       const accountLabel =
         paymentMode === "cash" ? selectedAccount?.label || "" : "";
+      const accountNumber =
+        paymentMode === "cash" ? selectedAccount?.accountNumber || "" : "";
 
       const result =
         paymentMode === "credit"
@@ -107,6 +109,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
               paymentMethod,
               accountId,
               accountLabel,
+              accountNumber,
               customerPhone: receiptPhone.trim() || undefined,
               customerName: receiptName.trim() || undefined,
             });
@@ -127,6 +130,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
         isCredit: paymentMode === "credit",
         paymentMethod,
         accountLabel,
+        accountNumber,
         customerName,
         customerPhone,
         date: new Date().toISOString(),
@@ -282,6 +286,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
                           onClick={() => setReceivedVia(acc.id)}
                         >
                           {acc.label}
+                          {acc.accountNumber ? ` · ${acc.accountNumber}` : ""}
                         </button>
                       ))}
                     </div>
@@ -508,23 +513,31 @@ const styles = {
   actions: { display: "flex", gap: 10, marginTop: 4 },
   backBtn: {
     flex: 1,
-    padding: 15,
+    minWidth: 0,
+    padding: "13px 10px",
     borderRadius: 14,
     border: "1.5px solid var(--border)",
     background: "var(--surface)",
     color: "var(--text-secondary)",
     fontWeight: 700,
     fontSize: 14,
+    whiteSpace: "normal",
+    lineHeight: 1.25,
+    textAlign: "center",
   },
   nextBtn: {
     flex: 1,
-    padding: 15,
+    minWidth: 0,
+    padding: "13px 10px",
     borderRadius: 14,
     border: "none",
     background: "var(--primary)",
     color: "white",
     fontWeight: 800,
     fontSize: 15,
+    whiteSpace: "normal",
+    lineHeight: 1.25,
+    textAlign: "center",
   },
   nextBtnCredit: { background: "#8A5A1E" },
 };

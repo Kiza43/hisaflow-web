@@ -20,13 +20,17 @@ const formatDateTime = (iso) => {
   );
 };
 
-const paymentMethodDisplay = (method, accountLabel, t) => {
+const paymentMethodDisplay = (method, accountLabel, accountNumber, t) => {
   if (method === "cash") return t("cashMethodOption");
   const methodLabel =
     method === "bank_transfer"
       ? t("bankTransferMethodOption")
       : t("lipaNambaMethodOption");
-  return accountLabel ? `${methodLabel} — ${accountLabel}` : methodLabel;
+  if (!accountLabel) return methodLabel;
+  const accountPart = accountNumber
+    ? `${accountLabel} · ${accountNumber}`
+    : accountLabel;
+  return `${methodLabel} — ${accountPart}`;
 };
 
 // sale = { items: [{productName, quantity, sellingPrice}], total, customerName?, customerPhone?, isCredit?, date }
@@ -118,7 +122,12 @@ const ReceiptModal = ({ visible, sale, settings, onClose }) => {
 
           {!sale.isCredit && sale.paymentMethod && (
             <div style={styles.methodLine}>
-              {paymentMethodDisplay(sale.paymentMethod, sale.accountLabel, t)}
+              {paymentMethodDisplay(
+                sale.paymentMethod,
+                sale.accountLabel,
+                sale.accountNumber,
+                t,
+              )}
             </div>
           )}
 

@@ -56,7 +56,10 @@ function initSchema() {
       date TEXT NOT NULL,
       supplier_id TEXT,
       supplier_name TEXT,
-      payment_method TEXT
+      payment_method TEXT,
+      account_id TEXT,
+      account_label TEXT,
+      account_number TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_batches_product ON stock_batches(product_id);
     CREATE INDEX IF NOT EXISTS idx_batches_date ON stock_batches(date);
@@ -74,6 +77,7 @@ function initSchema() {
       payment_method TEXT,
       account_id TEXT,
       account_label TEXT,
+      account_number TEXT,
       notes TEXT,
       date TEXT NOT NULL,
       edited_at TEXT,
@@ -245,6 +249,17 @@ addColumnIfMissing("products", "created_at", "TEXT");
 addColumnIfMissing("sales", "customer_phone", "TEXT");
 addColumnIfMissing("sales", "customer_name", "TEXT");
 addColumnIfMissing("sales", "discount", "REAL NOT NULL DEFAULT 0");
+// Which specific configured payment account (not just "bank transfer" as a
+// generic category) a restock was actually paid from — same idea as
+// sales.account_id/account_label, so a batch can show "CRDB Business"
+// instead of just "Bank Transfer" on the batch card.
+addColumnIfMissing("stock_batches", "account_id", "TEXT");
+addColumnIfMissing("stock_batches", "account_label", "TEXT");
+// The account number itself (e.g. "0123456789"), alongside the label
+// ("CRDB Business") already recorded above — so a batch or sale can
+// show both, the same as the account picker does when it's selected.
+addColumnIfMissing("stock_batches", "account_number", "TEXT");
+addColumnIfMissing("sales", "account_number", "TEXT");
 
 // Existing products from before this fix have no created_at recorded.
 // Backfilling with each product's earliest stock batch date is a

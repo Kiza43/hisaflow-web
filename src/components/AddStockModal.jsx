@@ -14,6 +14,9 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
   const [supplierId, setSupplierId] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState("paid");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [accountId, setAccountId] = useState(null);
+  const [accountLabel, setAccountLabel] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -27,6 +30,9 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
       setSupplierId(null);
       setPaymentStatus("paid");
       setPaymentMethod("cash");
+      setAccountId(null);
+      setAccountLabel("");
+      setAccountNumber("");
       setError("");
       setSaving(false);
     }
@@ -51,6 +57,9 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
         supplierId: supplierId || null,
         supplierName: selectedSupplier?.name || "",
         paymentMethod: paymentStatus === "paid" ? paymentMethod : "",
+        accountId: paymentStatus === "paid" ? accountId : null,
+        accountLabel: paymentStatus === "paid" ? accountLabel : "",
+        accountNumber: paymentStatus === "paid" ? accountNumber : "",
       });
       if (result && result.success === false) {
         setError(result.error);
@@ -107,6 +116,12 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
           onPaymentStatusChange={setPaymentStatus}
           paymentMethod={paymentMethod}
           onPaymentMethodChange={setPaymentMethod}
+          accountId={accountId}
+          onAccountChange={(id, label, number) => {
+            setAccountId(id);
+            setAccountLabel(label);
+            setAccountNumber(number || "");
+          }}
         />
 
         <div style={styles.actions}>

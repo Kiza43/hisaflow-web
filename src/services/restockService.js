@@ -15,6 +15,9 @@ export const restockService = {
     supplierId,
     supplierName,
     paymentMethod,
+    accountId,
+    accountLabel,
+    accountNumber,
   }) {
     return dataService.addStock({
       productId,
@@ -23,6 +26,9 @@ export const restockService = {
       supplierId,
       supplierName,
       paymentMethod,
+      accountId,
+      accountLabel,
+      accountNumber,
     });
   },
 

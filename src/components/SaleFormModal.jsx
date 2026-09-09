@@ -130,6 +130,8 @@ const SaleFormModal = ({
         paymentMode === "cash" ? selectedAccount?.id || null : null;
       const accountLabel =
         paymentMode === "cash" ? selectedAccount?.label || "" : "";
+      const accountNumber =
+        paymentMode === "cash" ? selectedAccount?.accountNumber || "" : "";
 
       const result =
         paymentMode === "credit"
@@ -145,6 +147,7 @@ const SaleFormModal = ({
               paymentMethod,
               accountId,
               accountLabel,
+              accountNumber,
               customerPhone: receiptPhone.trim() || undefined,
               customerName: receiptName.trim() || undefined,
               discount: discountNum || undefined,
@@ -169,6 +172,7 @@ const SaleFormModal = ({
         isCredit: paymentMode === "credit",
         paymentMethod,
         accountLabel,
+        accountNumber,
         customerName,
         customerPhone,
         date: new Date().toISOString(),
@@ -308,6 +312,7 @@ const SaleFormModal = ({
                   onClick={() => setReceivedVia(acc.id)}
                 >
                   {acc.label}
+                  {acc.accountNumber ? ` · ${acc.accountNumber}` : ""}
                 </button>
               ))}
             </div>

@@ -37,6 +37,9 @@ const batchRowToObject = (b) => ({
   supplierId: b.supplier_id,
   supplierName: b.supplier_name,
   paymentMethod: b.payment_method,
+  accountId: b.account_id,
+  accountLabel: b.account_label,
+  accountNumber: b.account_number,
 });
 
 function getProducts() {
@@ -60,8 +63,8 @@ const saveProducts = db.transaction((products) => {
     VALUES (@id, @name, @category, @brand, @unit, @sellingPrice, @buyingPrice, @stock, @imageUri, @expiryDate, @createdAt)
   `);
   const insertBatch = db.prepare(`
-    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method)
-    VALUES (@id, @productId, @quantity, @remaining, @buyingPrice, @date, @supplierId, @supplierName, @paymentMethod)
+    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method, account_id, account_label, account_number)
+    VALUES (@id, @productId, @quantity, @remaining, @buyingPrice, @date, @supplierId, @supplierName, @paymentMethod, @accountId, @accountLabel, @accountNumber)
   `);
 
   for (const p of products) {
@@ -89,6 +92,9 @@ const saveProducts = db.transaction((products) => {
         supplierId: b.supplierId ?? null,
         supplierName: b.supplierName ?? null,
         paymentMethod: b.paymentMethod ?? null,
+        accountId: b.accountId ?? null,
+        accountLabel: b.accountLabel ?? null,
+        accountNumber: b.accountNumber ?? null,
       });
     }
   }
@@ -111,6 +117,7 @@ function getSales() {
       paymentMethod: s.payment_method,
       accountId: s.account_id,
       accountLabel: s.account_label,
+      accountNumber: s.account_number,
       notes: s.notes,
       date: s.date,
       editedAt: s.edited_at,
@@ -127,8 +134,8 @@ function getSales() {
 const saveSales = db.transaction((sales) => {
   db.prepare("DELETE FROM sales").run();
   const insert = db.prepare(`
-    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, edited_at, batch_breakdown, customer_phone, customer_name, discount)
-    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @editedAt, @breakdownJson, @customerPhone, @customerName, @discount)
+    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, account_number, notes, date, edited_at, batch_breakdown, customer_phone, customer_name, discount)
+    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @accountNumber, @notes, @date, @editedAt, @breakdownJson, @customerPhone, @customerName, @discount)
   `);
   for (const s of sales) {
     insert.run({
@@ -144,6 +151,7 @@ const saveSales = db.transaction((sales) => {
       paymentMethod: s.paymentMethod ?? null,
       accountId: s.accountId ?? null,
       accountLabel: s.accountLabel ?? null,
+      accountNumber: s.accountNumber ?? null,
       notes: s.notes ?? null,
       date: s.date,
       editedAt: s.editedAt ?? null,
@@ -556,6 +564,9 @@ const addStockTx = db.transaction(
     supplierId,
     supplierName,
     paymentMethod,
+    accountId,
+    accountLabel,
+    accountNumber,
   ) => {
     const product = db
       .prepare("SELECT * FROM products WHERE id = ?")
@@ -565,8 +576,8 @@ const addStockTx = db.transaction(
     const date = new Date().toISOString();
     db.prepare(
       `
-    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method, account_id, account_label, account_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
     ).run(
       genId("b"),
@@ -578,15 +589,21 @@ const addStockTx = db.transaction(
       supplierId || null,
       supplierName || null,
       paymentMethod || null,
+      accountId || null,
+      accountLabel || null,
+      accountNumber || null,
     );
 
     recomputeProductSummary(productId);
 
+    // Show exactly which account paid for it, when one was picked — not
+    // just "added stock", the same specificity accountLabel gives sales.
+    const paidViaSuffix = accountLabel ? ` — ${accountLabel}` : "";
     db.prepare(
       `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'added stock', ?, NULL, ?)`,
     ).run(
       genId("al"),
-      `${product.name} +${quantity} @ TZS ${Math.round(buyingPrice).toLocaleString("en-US")}`,
+      `${product.name} +${quantity} @ TZS ${Math.round(buyingPrice).toLocaleString("en-US")}${paidViaSuffix}`,
       date,
     );
   },
@@ -599,6 +616,9 @@ function addStock({
   supplierId,
   supplierName,
   paymentMethod,
+  accountId,
+  accountLabel,
+  accountNumber,
 }) {
   if (!quantity || quantity <= 0)
     return { success: false, error: "Weka kiasi sahihi" };
@@ -612,6 +632,9 @@ function addStock({
       supplierId,
       supplierName,
       paymentMethod,
+      accountId,
+      accountLabel,
+      accountNumber,
     );
     return { success: true };
   } catch (err) {
@@ -641,8 +664,8 @@ const completeRestockCartTx = db.transaction((cartItems, meta) => {
 
   const date = new Date().toISOString();
   const insertBatch = db.prepare(`
-    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO stock_batches (id, product_id, quantity, remaining, buying_price, date, supplier_id, supplier_name, payment_method, account_id, account_label, account_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const item of cartItems) {
@@ -656,13 +679,17 @@ const completeRestockCartTx = db.transaction((cartItems, meta) => {
       meta.supplierId || null,
       meta.supplierName || null,
       meta.paymentMethod || null,
+      meta.accountId || null,
+      meta.accountLabel || null,
+      meta.accountNumber || null,
     );
     recomputeProductSummary(item.productId);
   }
 
+  const paidViaSuffix = meta.accountLabel ? ` — ${meta.accountLabel}` : "";
   db.prepare(
     `INSERT INTO activity_log (id, action, details, actor_name, date) VALUES (?, 'restocked multiple products', ?, NULL, ?)`,
-  ).run(genId("al"), `${cartItems.length} bidhaa`, date);
+  ).run(genId("al"), `${cartItems.length} bidhaa${paidViaSuffix}`, date);
 });
 
 function completeRestockCart(cartItems, meta = {}) {
@@ -1155,6 +1182,7 @@ const completeSaleTx = db.transaction(
     paymentMethod,
     accountId,
     accountLabel,
+    accountNumber,
     customerPhone,
     customerName,
     discount,
@@ -1224,8 +1252,8 @@ const completeSaleTx = db.transaction(
 
     db.prepare(
       `
-    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown, customer_phone, customer_name, discount)
-    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdown, @customerPhone, @customerName, @discount)
+    INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, account_number, notes, date, batch_breakdown, customer_phone, customer_name, discount)
+    VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @accountNumber, @notes, @date, @breakdown, @customerPhone, @customerName, @discount)
   `,
     ).run({
       id: saleId,
@@ -1240,6 +1268,7 @@ const completeSaleTx = db.transaction(
       paymentMethod: paymentMethod || "cash",
       accountId: accountId || null,
       accountLabel: accountLabel || null,
+      accountNumber: accountNumber || null,
       notes: "",
       date,
       breakdown: breakdownJson,
@@ -1272,6 +1301,7 @@ const completeSaleTx = db.transaction(
       paymentMethod: paymentMethod || "cash",
       accountId: accountId || null,
       accountLabel: accountLabel || null,
+      accountNumber: accountNumber || null,
       notes: "",
       date,
       editedAt: null,
@@ -1290,6 +1320,7 @@ function completeSale({
   paymentMethod,
   accountId,
   accountLabel,
+  accountNumber,
   customerPhone,
   customerName,
   discount,
@@ -1312,6 +1343,7 @@ function completeSale({
       paymentMethod,
       accountId,
       accountLabel,
+      accountNumber,
       customerPhone,
       customerName,
       discount,
@@ -1420,8 +1452,8 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
 
     db.prepare(
       `
-      INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, notes, date, batch_breakdown, customer_phone, customer_name, discount)
-      VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @notes, @date, @breakdownJson, @customerPhone, @customerName, @discount)
+      INSERT INTO sales (id, product_id, product_name, quantity, buying_price, selling_price, total_cost, total_revenue, profit, payment_method, account_id, account_label, account_number, notes, date, batch_breakdown, customer_phone, customer_name, discount)
+      VALUES (@id, @productId, @productName, @quantity, @buyingPrice, @sellingPrice, @totalCost, @totalRevenue, @profit, @paymentMethod, @accountId, @accountLabel, @accountNumber, @notes, @date, @breakdownJson, @customerPhone, @customerName, @discount)
     `,
     ).run({
       id: saleId,
@@ -1436,6 +1468,7 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
       paymentMethod: meta.paymentMethod || "cash",
       accountId: meta.accountId || null,
       accountLabel: meta.accountLabel || "",
+      accountNumber: meta.accountNumber || "",
       notes: "",
       date,
       breakdownJson: JSON.stringify(breakdown),
@@ -1457,6 +1490,7 @@ const completeCartSaleTx = db.transaction((cartItems, meta) => {
       paymentMethod: meta.paymentMethod || "cash",
       accountId: meta.accountId || null,
       accountLabel: meta.accountLabel || "",
+      accountNumber: meta.accountNumber || "",
       notes: "",
       date,
       batchBreakdown: breakdown,

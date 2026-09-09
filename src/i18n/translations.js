@@ -34,8 +34,6 @@ const translations = {
     customerPhoneOptionalLabel: "Namba ya Simu (si lazima)",
     createOrderButton: "Tengeneza Oda",
     issuedByLabel: "Imeandikwa na",
-    issuedByPlaceholder: "Jina lako",
-    issuedByRequiredError: "Andika jina lako",
     customerNameLabelShort: "Mteja",
     customerPhoneLabelShort: "Simu",
     orderStatusLabel: "Hali",
@@ -394,8 +392,6 @@ const translations = {
     averagePriceLabel: "Bei ya Wastani",
     activeBatchesLabel: "Vikundi Vinavyotumika",
     noBatchesYet: "Hakuna vikundi vya stoo bado",
-    fifoExplainer:
-      "Bidhaa zinauzwa kutoka kikundi cha zamani zaidi kwanza (FIFO) — hii ndiyo inayohakikisha faida inaonyesha bei halisi uliyonunulia kila kundi.",
     currentlyUsingFifo: "Kinatumika Sasa",
     batchNumberLabel: "Kundi #{n}",
     depletedLabel: "Limekwisha",
@@ -474,6 +470,7 @@ const translations = {
     enterAccountLabelError: "Weka jina la akaunti",
     enterAccountNumberError: "Weka namba ya akaunti",
     receivedViaLabel: "Ilipokelewa Kupitia",
+    paidViaLabel: "Ilipwa Kupitia",
     noPaymentAccountsHint:
       "Kidokezo: ongeza majina ya akaunti zako mahususi kwenye Mipangilio kwa maelezo zaidi",
     notifyPastBuyersTitle: "Wajulishe Wateja Waliokwisha Nunua",
@@ -557,8 +554,6 @@ const translations = {
     customerPhoneOptionalLabel: "Phone Number (optional)",
     createOrderButton: "Create Order",
     issuedByLabel: "Issued by",
-    issuedByPlaceholder: "Your name",
-    issuedByRequiredError: "Enter your name",
     customerNameLabelShort: "Customer",
     customerPhoneLabelShort: "Phone",
     orderStatusLabel: "Status",
@@ -913,8 +908,6 @@ const translations = {
     averagePriceLabel: "Average Price",
     activeBatchesLabel: "Active Batches",
     noBatchesYet: "No stock batches yet",
-    fifoExplainer:
-      "Products sell from the oldest batch first (FIFO) — this is what keeps profit reflecting the real price paid for each delivery.",
     currentlyUsingFifo: "Currently Selling From",
     batchNumberLabel: "Batch #{n}",
     depletedLabel: "Depleted",
@@ -992,6 +985,7 @@ const translations = {
     enterAccountLabelError: "Enter the account name",
     enterAccountNumberError: "Enter the account number",
     receivedViaLabel: "Received Via",
+    paidViaLabel: "Paid Via",
     noPaymentAccountsHint:
       "Tip: add your specific account names in Settings for more detail",
     notifyPastBuyersTitle: "Notify Past Buyers",

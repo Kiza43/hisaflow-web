@@ -68,7 +68,15 @@ const BatchCard = ({ batch, index, isOldestActive }) => {
           )}
           {batch.supplierName && batch.paymentMethod && " · "}
           {batch.paymentMethod && (
-            <span>{paymentMethodLabel(batch.paymentMethod, t)}</span>
+            // The specific account (e.g. "CRDB Business") when one was
+            // picked at restock time — falls back to the generic method
+            // label ("Bank Transfer") for batches recorded before this,
+            // or restocks where no specific account was chosen.
+            <span>
+              {batch.accountLabel
+                ? `${batch.accountLabel}${batch.accountNumber ? ` · ${batch.accountNumber}` : ""}`
+                : paymentMethodLabel(batch.paymentMethod, t)}
+            </span>
           )}
         </div>
       )}

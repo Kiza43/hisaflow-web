@@ -26,6 +26,9 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
   const [supplierId, setSupplierId] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("paid");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [accountId, setAccountId] = useState(null);
+  const [accountLabel, setAccountLabel] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,6 +47,9 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
         supplierId: supplierId || null,
         supplierName: selectedSupplier?.name || "",
         paymentMethod: paymentStatus === "paid" ? paymentMethod : "",
+        accountId: paymentStatus === "paid" ? accountId : null,
+        accountLabel: paymentStatus === "paid" ? accountLabel : "",
+        accountNumber: paymentStatus === "paid" ? accountNumber : "",
       });
 
       if (!result.success) {
@@ -59,6 +65,8 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
       setSupplierId("");
       setPaymentStatus("paid");
       setPaymentMethod("cash");
+      setAccountId(null);
+      setAccountLabel("");
       onCompleted();
     } catch (err) {
       console.error("Restock completion error:", err);
@@ -107,6 +115,12 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
               onPaymentStatusChange={setPaymentStatus}
               paymentMethod={paymentMethod}
               onPaymentMethodChange={setPaymentMethod}
+              accountId={accountId}
+              onAccountChange={(id, label, number) => {
+                setAccountId(id);
+                setAccountLabel(label);
+                setAccountNumber(number || "");
+              }}
             />
           </div>
         )}
