@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { dataService } from "../services/dataService";
-import SupplierPicker from "./SupplierPicker.jsx";
+import SupplierPaymentSection from "./SupplierPaymentSection.jsx";
+import StepIndicator from "./StepIndicator.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { blockInvalidNumberKeys } from "../utils/numberInput";
 
@@ -15,12 +16,6 @@ const PRESET_UNITS = [
   { value: "kifurushi", label: "Kifurushi" },
   { value: "dazani", label: "Dazani" },
   { value: "sanduku", label: "Sanduku" },
-];
-
-const PAYMENT_METHODS = [
-  { value: "cash", labelKey: "cashMethodOption" },
-  { value: "bank_transfer", labelKey: "bankTransferMethodOption" },
-  { value: "lipa_namba", labelKey: "lipaNambaMethodOption" },
 ];
 
 const emptyForm = {
@@ -205,35 +200,12 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
           {editingProduct ? t("editProductTitle") : t("addProductTitle")}
         </h2>
 
-        <div style={styles.stepRow}>
-          {STEPS.map((key, i) => (
-            <React.Fragment key={key}>
-              <div
-                style={{
-                  ...styles.stepDot,
-                  ...(i <= step ? styles.stepDotActive : {}),
-                }}
-              >
-                {i < step ? "✓" : i + 1}
-              </div>
-              {i < STEPS.length - 1 && (
-                <div
-                  style={{
-                    ...styles.stepLine,
-                    ...(i < step ? styles.stepLineActive : {}),
-                  }}
-                />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-        <div style={styles.stepIndicatorText}>
-          {t("stepIndicator", {
-            step: step + 1,
-            total: STEPS.length,
-            label: stepLabel(step),
-          })}
-        </div>
+        <StepIndicator
+          steps={STEPS}
+          currentStep={step}
+          stepLabel={stepLabel}
+          showStepCount
+        />
 
         {error && <div style={styles.error}>{error}</div>}
 
@@ -411,80 +383,20 @@ const ProductFormModal = ({ visible, editingProduct, onSave, onClose }) => {
             />
 
             {!editingProduct && (
-              <>
-                <label style={styles.label}>{t("supplierOptionalLabel")}</label>
-                <SupplierPicker
-                  suppliers={suppliers}
-                  selectedSupplierId={form.supplierId || null}
-                  onSelect={(id) => setForm({ ...form, supplierId: id || "" })}
-                  onSupplierAdded={(newSupplier) => {
-                    setSuppliers((prev) => [...prev, newSupplier]);
-                    setForm({ ...form, supplierId: newSupplier.id });
-                  }}
-                />
-
-                {form.supplierId && (
-                  <div style={styles.paymentToggleRow}>
-                    <button
-                      style={{
-                        ...styles.paymentToggle,
-                        ...(form.supplierPaymentStatus === "paid"
-                          ? styles.paymentToggleActive
-                          : {}),
-                      }}
-                      onClick={() =>
-                        setForm({ ...form, supplierPaymentStatus: "paid" })
-                      }
-                    >
-                      {t("paidNowOption")}
-                    </button>
-                    <button
-                      style={{
-                        ...styles.paymentToggle,
-                        ...(form.supplierPaymentStatus === "credit"
-                          ? styles.paymentToggleActiveCredit
-                          : {}),
-                      }}
-                      onClick={() =>
-                        setForm({ ...form, supplierPaymentStatus: "credit" })
-                      }
-                    >
-                      {t("oweSupplierOption")}
-                    </button>
-                  </div>
-                )}
-
-                {/* Recording how stock was paid for doesn't require a
-                    supplier first — "owe supplier" needs someone to owe,
-                    but "I paid cash for this" is true whether or not a
-                    formal supplier record exists for a one-off purchase. */}
-                {(!form.supplierId ||
-                  form.supplierPaymentStatus === "paid") && (
-                  <>
-                    <label style={styles.label}>
-                      {t("paymentMethodLabel")}
-                    </label>
-                    <div style={styles.methodRow}>
-                      {PAYMENT_METHODS.map((m) => (
-                        <button
-                          key={m.value}
-                          style={{
-                            ...styles.methodChip,
-                            ...(form.supplierPaymentMethod === m.value
-                              ? styles.methodChipActive
-                              : {}),
-                          }}
-                          onClick={() =>
-                            setForm({ ...form, supplierPaymentMethod: m.value })
-                          }
-                        >
-                          {t(m.labelKey)}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
+              <SupplierPaymentSection
+                suppliers={suppliers}
+                onSuppliersChange={setSuppliers}
+                supplierId={form.supplierId}
+                onSupplierChange={(id) => setForm({ ...form, supplierId: id })}
+                paymentStatus={form.supplierPaymentStatus}
+                onPaymentStatusChange={(status) =>
+                  setForm({ ...form, supplierPaymentStatus: status })
+                }
+                paymentMethod={form.supplierPaymentMethod}
+                onPaymentMethodChange={(method) =>
+                  setForm({ ...form, supplierPaymentMethod: method })
+                }
+              />
             )}
           </>
         )}
@@ -549,35 +461,6 @@ const styles = {
     overflow: "auto",
   },
   title: { fontSize: 18, fontWeight: 800, marginBottom: 16 },
-  stepRow: { display: "flex", alignItems: "center", marginBottom: 8 },
-  stepDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 999,
-    background: "var(--border-muted)",
-    color: "var(--text-muted)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 800,
-    flexShrink: 0,
-  },
-  stepDotActive: { background: "var(--primary)", color: "white" },
-  stepLine: {
-    flex: 1,
-    height: 2,
-    background: "var(--border-muted)",
-    margin: "0 4px",
-  },
-  stepLineActive: { background: "var(--primary)" },
-  stepIndicatorText: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "var(--text-muted)",
-    textAlign: "center",
-    marginBottom: 18,
-  },
   error: {
     background: "var(--danger-light)",
     color: "var(--danger)",
@@ -656,52 +539,6 @@ const styles = {
     color: "var(--text-muted)",
     marginTop: -10,
     marginBottom: 10,
-  },
-  paymentToggleRow: {
-    display: "flex",
-    gap: 8,
-    marginBottom: 14,
-    marginTop: -6,
-  },
-  paymentToggle: {
-    flex: 1,
-    padding: "9px 0",
-    borderRadius: 10,
-    borderWidth: "1.5px",
-    borderStyle: "solid",
-    borderColor: "var(--border)",
-    background: "var(--surface)",
-    color: "var(--text-secondary)",
-    fontWeight: 700,
-    fontSize: 12,
-  },
-  paymentToggleActive: {
-    background: "var(--success-light)",
-    borderColor: "var(--success)",
-    color: "var(--success)",
-  },
-  paymentToggleActiveCredit: {
-    background: "var(--danger-light)",
-    borderColor: "var(--danger)",
-    color: "var(--danger)",
-  },
-  methodRow: { display: "flex", gap: 6, marginTop: 8 },
-  methodChip: {
-    flex: 1,
-    padding: "8px 0",
-    borderRadius: 10,
-    borderWidth: "1.5px",
-    borderStyle: "solid",
-    borderColor: "var(--border)",
-    background: "var(--surface)",
-    color: "var(--text-secondary)",
-    fontWeight: 600,
-    fontSize: 11,
-  },
-  methodChipActive: {
-    background: "var(--primary-light)",
-    borderColor: "var(--primary)",
-    color: "var(--primary-dark)",
   },
   actions: { display: "flex", gap: 10, marginTop: 6 },
   cancelBtn: {

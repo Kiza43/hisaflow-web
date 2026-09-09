@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { dataService } from "../services/dataService";
 import ProductFormModal from "../components/ProductFormModal.jsx";
 import ImportProductsModal from "../components/ImportProductsModal.jsx";
+import UndoToast from "../components/UndoToast.jsx";
 import ProductCard from "../components/ProductCard.jsx";
 import SaleFormModal from "../components/SaleFormModal.jsx";
 import CartBar from "../components/CartBar.jsx";
@@ -50,12 +51,19 @@ const ProductsScreen = ({ initialFilter }) => {
   const [showRestockCart, setShowRestockCart] = useState(false);
   const [receiptSale, setReceiptSale] = useState(null);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
-  const [deleting, setDeleting] = useState(false);
   const [showPoster, setShowPoster] = useState(false);
   const [notifyBuyersProduct, setNotifyBuyersProduct] = useState(null);
   const [viewingBatchesProduct, setViewingBatchesProduct] = useState(null);
   const [loadingSample, setLoadingSample] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showNotifyPicker, setShowNotifyPicker] = useState(false);
+  const [notifyPickerProductId, setNotifyPickerProductId] = useState("");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
+  const [pendingUndo, setPendingUndo] = useState(null);
+  const pendingUndoRef = useRef(null);
+  const UNDO_WINDOW_MS = 6000;
   const { addToCart } = useCart();
   const { addToRestockCart } = useRestockCart();
 
@@ -135,22 +143,124 @@ const ProductsScreen = ({ initialFilter }) => {
     setEditingProduct(null);
   };
 
+  useEffect(() => {
+    pendingUndoRef.current = pendingUndo;
+  }, [pendingUndo]);
+
+  // Commits deletion is deliberately fire-and-forget when called from
+  // an expiring timer or an unmount cleanup — there's nothing to await
+  // into at that point, and the alternative (blocking navigation on a
+  // save) would be worse than a delete that finishes a moment after the
+  // person has already moved on.
+  const commitDeletion = (remainingProducts, removedProducts) => {
+    dataService.saveProducts(remainingProducts);
+    if (removedProducts.length === 1) {
+      activityLogService.logActivity(
+        "deleted a product",
+        removedProducts[0].name,
+      );
+    } else if (removedProducts.length > 1) {
+      activityLogService.logActivity(
+        "deleted multiple products",
+        `${removedProducts.length} bidhaa`,
+      );
+    }
+  };
+
+  // A second delete while the first is still pending commits the first
+  // immediately rather than losing it or stacking two timers — only one
+  // deletion is ever "undoable" at a time, which is also just easier to
+  // reason about as a person using it.
+  const scheduleUndo = (
+    originalProducts,
+    remainingProducts,
+    removedProducts,
+  ) => {
+    if (pendingUndoRef.current) {
+      clearTimeout(pendingUndoRef.current.timeoutId);
+      commitDeletion(
+        pendingUndoRef.current.remainingProducts,
+        pendingUndoRef.current.removedProducts,
+      );
+    }
+    const timeoutId = setTimeout(() => {
+      commitDeletion(remainingProducts, removedProducts);
+      setPendingUndo(null);
+    }, UNDO_WINDOW_MS);
+    setPendingUndo({
+      originalProducts,
+      remainingProducts,
+      removedProducts,
+      timeoutId,
+    });
+  };
+
+  const handleUndo = () => {
+    if (!pendingUndo) return;
+    clearTimeout(pendingUndo.timeoutId);
+    setProducts(pendingUndo.originalProducts);
+    setPendingUndo(null);
+  };
+
+  // If the person navigates away while a deletion is still undoable, it
+  // commits immediately rather than being silently lost, or firing a
+  // setState after this screen has already unmounted.
+  useEffect(() => {
+    return () => {
+      if (pendingUndoRef.current) {
+        clearTimeout(pendingUndoRef.current.timeoutId);
+        commitDeletion(
+          pendingUndoRef.current.remainingProducts,
+          pendingUndoRef.current.removedProducts,
+        );
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleDelete = (productId) => setPendingDeleteId(productId);
 
-  const confirmDelete = async () => {
-    if (deleting) return;
-    setDeleting(true);
-    try {
-      const removed = products.find((p) => p.id === pendingDeleteId);
-      await persist(products.filter((p) => p.id !== pendingDeleteId));
-      if (removed)
-        await activityLogService.logActivity("deleted a product", removed.name);
+  const confirmDelete = () => {
+    const removed = products.find((p) => p.id === pendingDeleteId);
+    if (!removed) {
       setPendingDeleteId(null);
-    } catch (err) {
-      console.error("Delete product error:", err);
-    } finally {
-      setDeleting(false);
+      return;
     }
+    const remaining = products.filter((p) => p.id !== pendingDeleteId);
+    setProducts(remaining);
+    setPendingDeleteId(null);
+    scheduleUndo(products, remaining, [removed]);
+  };
+
+  const toggleSelectMode = () => {
+    setSelectMode((prev) => !prev);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelectProduct = (productId) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
+
+  // Selecting "all" means all currently visible (filtered/searched)
+  // products, not every product in the shop — deleting should only ever
+  // affect what the person can actually see and reason about right now.
+  const selectAllVisible = () =>
+    setSelectedIds(new Set(displayedProducts.map((p) => p.id)));
+  const deselectAll = () => setSelectedIds(new Set());
+
+  const confirmBulkDelete = () => {
+    const removed = products.filter((p) => selectedIds.has(p.id));
+    const remaining = products.filter((p) => !selectedIds.has(p.id));
+    setProducts(remaining);
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setPendingBulkDelete(false);
+    scheduleUndo(products, remaining, removed);
   };
 
   const handleAddSampleProducts = async () => {
@@ -295,6 +405,15 @@ const ProductsScreen = ({ initialFilter }) => {
             {t("importFromExcelButton")}
           </button>
           <button
+            style={styles.posterBtn}
+            onClick={() => setShowNotifyPicker(true)}
+          >
+            {t("sendReminderButton")}
+          </button>
+          <button style={styles.posterBtn} onClick={toggleSelectMode}>
+            {selectMode ? t("cancelButton") : t("selectButton")}
+          </button>
+          <button
             style={styles.addBtn}
             onClick={() => {
               setEditingProduct(null);
@@ -430,6 +549,34 @@ const ProductsScreen = ({ initialFilter }) => {
         </div>
       ) : (
         <>
+          {selectMode && (
+            <div style={styles.selectionBar}>
+              <span style={styles.selectionCount}>
+                {t("selectedCountLabel", { count: selectedIds.size })}
+              </span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  style={styles.selectionLinkBtn}
+                  onClick={selectAllVisible}
+                >
+                  {t("selectAllButton")}
+                </button>
+                <button style={styles.selectionLinkBtn} onClick={deselectAll}>
+                  {t("deselectAllButton")}
+                </button>
+                <button
+                  style={{
+                    ...styles.selectionDeleteBtn,
+                    opacity: selectedIds.size === 0 ? 0.4 : 1,
+                  }}
+                  disabled={selectedIds.size === 0}
+                  onClick={() => setPendingBulkDelete(true)}
+                >
+                  {t("deleteSelectedButton")}
+                </button>
+              </div>
+            </div>
+          )}
           <div style={styles.grid}>
             {pagedProducts.map((p) => (
               <ProductCard
@@ -444,8 +591,10 @@ const ProductsScreen = ({ initialFilter }) => {
                 onAddToCart={addToCart}
                 onAddStock={(prod) => setAddStockProduct(prod)}
                 onAddToRestockCart={addToRestockCart}
-                onNotifyPastBuyers={setNotifyBuyersProduct}
                 onViewBatches={setViewingBatchesProduct}
+                selectMode={selectMode}
+                isSelected={selectedIds.has(p.id)}
+                onToggleSelect={toggleSelectProduct}
               />
             ))}
           </div>
@@ -529,10 +678,70 @@ const ProductsScreen = ({ initialFilter }) => {
         message={t("confirmDeleteProduct")}
         onConfirm={confirmDelete}
         onCancel={() => setPendingDeleteId(null)}
-        busy={deleting}
+      />
+
+      <ConfirmModal
+        visible={pendingBulkDelete}
+        message={t("confirmBulkDeleteProducts", { count: selectedIds.size })}
+        onConfirm={confirmBulkDelete}
+        onCancel={() => setPendingBulkDelete(false)}
       />
 
       <PosterModal visible={showPoster} onClose={() => setShowPoster(false)} />
+
+      {showNotifyPicker && (
+        <div
+          style={styles.pickerOverlay}
+          onClick={() => {
+            setShowNotifyPicker(false);
+            setNotifyPickerProductId("");
+          }}
+        >
+          <div style={styles.pickerModal} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.pickerTitle}>{t("sendReminderButton")}</h2>
+            <label style={styles.pickerLabel}>
+              {t("selectProductPlaceholder")}
+            </label>
+            <select
+              style={styles.pickerSelect}
+              value={notifyPickerProductId}
+              onChange={(e) => setNotifyPickerProductId(e.target.value)}
+            >
+              <option value="">{t("selectProductPlaceholder")}</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <div style={styles.pickerActions}>
+              <button
+                style={styles.pickerCancelBtn}
+                onClick={() => {
+                  setShowNotifyPicker(false);
+                  setNotifyPickerProductId("");
+                }}
+              >
+                {t("cancelButton")}
+              </button>
+              <button
+                style={styles.pickerContinueBtn}
+                disabled={!notifyPickerProductId}
+                onClick={() => {
+                  const product = products.find(
+                    (p) => p.id === notifyPickerProductId,
+                  );
+                  setNotifyBuyersProduct(product);
+                  setShowNotifyPicker(false);
+                  setNotifyPickerProductId("");
+                }}
+              >
+                {t("continueButton")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <NotifyPastBuyersModal
         visible={!!notifyBuyersProduct}
@@ -544,6 +753,20 @@ const ProductsScreen = ({ initialFilter }) => {
         visible={!!viewingBatchesProduct}
         product={viewingBatchesProduct}
         onClose={() => setViewingBatchesProduct(null)}
+      />
+
+      <UndoToast
+        visible={!!pendingUndo}
+        message={
+          pendingUndo && pendingUndo.removedProducts.length === 1
+            ? t("productDeletedMessage", {
+                name: pendingUndo.removedProducts[0].name,
+              })
+            : t("productsDeletedMessage", {
+                count: pendingUndo?.removedProducts.length || 0,
+              })
+        }
+        onUndo={handleUndo}
       />
     </div>
   );
@@ -593,6 +816,91 @@ const styles = {
     color: "var(--text-secondary)",
     fontWeight: 700,
     fontSize: 13,
+  },
+  pickerOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(41,37,34,0.4)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 50,
+  },
+  pickerModal: {
+    width: 360,
+    background: "var(--surface)",
+    borderRadius: 20,
+    padding: 24,
+  },
+  pickerTitle: { fontSize: 17, fontWeight: 800, marginBottom: 16 },
+  pickerLabel: {
+    display: "block",
+    fontSize: 12,
+    fontWeight: 700,
+    marginBottom: 6,
+    color: "var(--text-primary)",
+  },
+  pickerSelect: {
+    width: "100%",
+    padding: "11px 13px",
+    border: "1.5px solid var(--border)",
+    borderRadius: 12,
+    fontSize: 14,
+    fontWeight: 600,
+    marginBottom: 20,
+    background: "var(--bg)",
+    color: "var(--text-primary)",
+  },
+  pickerActions: { display: "flex", gap: 10 },
+  pickerCancelBtn: {
+    flex: 1,
+    padding: 13,
+    borderRadius: 12,
+    border: "1.5px solid var(--border)",
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  pickerContinueBtn: {
+    flex: 1,
+    padding: 13,
+    borderRadius: 12,
+    border: "none",
+    background: "var(--primary)",
+    color: "white",
+    fontWeight: 800,
+    fontSize: 14,
+  },
+  selectionBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "10px 16px",
+    background: "var(--primary-light)",
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  selectionCount: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "var(--primary-dark)",
+  },
+  selectionLinkBtn: {
+    background: "none",
+    border: "none",
+    fontSize: 12,
+    fontWeight: 700,
+    color: "var(--primary-dark)",
+  },
+  selectionDeleteBtn: {
+    padding: "8px 16px",
+    borderRadius: 10,
+    border: "none",
+    background: "var(--danger)",
+    color: "white",
+    fontWeight: 700,
+    fontSize: 12,
   },
   emptyState: {
     background: "var(--surface)",

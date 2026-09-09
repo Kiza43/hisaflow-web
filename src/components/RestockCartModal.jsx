@@ -3,15 +3,9 @@ import { useRestockCart } from "../context/RestockCartContext.jsx";
 import { restockService } from "../services/restockService";
 import { supplierService } from "../services/supplierService";
 import { dataService } from "../services/dataService";
-import SupplierPicker from "./SupplierPicker.jsx";
+import SupplierPaymentSection from "./SupplierPaymentSection.jsx";
 import RestockCartItemRow from "./RestockCartItemRow.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
-
-const PAYMENT_METHODS = [
-  { value: "cash", labelKey: "cashMethodOption" },
-  { value: "bank_transfer", labelKey: "bankTransferMethodOption" },
-  { value: "lipa_namba", labelKey: "lipaNambaMethodOption" },
-];
 
 const formatTZS = (amount) => {
   const v = typeof amount === "number" && !isNaN(amount) ? amount : 0;
@@ -104,64 +98,16 @@ const RestockCartModal = ({ visible, onClose, onCompleted }) => {
 
         {items.length > 0 && (
           <div style={{ marginBottom: 4 }}>
-            <label style={styles.fieldLabel}>
-              {t("supplierOptionalLabel")}
-            </label>
-            <SupplierPicker
+            <SupplierPaymentSection
               suppliers={suppliers}
-              selectedSupplierId={supplierId || null}
-              onSelect={(id) => setSupplierId(id || "")}
-              onSupplierAdded={(newSupplier) => {
-                setSuppliers((prev) => [...prev, newSupplier]);
-                setSupplierId(newSupplier.id);
-              }}
+              onSuppliersChange={setSuppliers}
+              supplierId={supplierId}
+              onSupplierChange={setSupplierId}
+              paymentStatus={paymentStatus}
+              onPaymentStatusChange={setPaymentStatus}
+              paymentMethod={paymentMethod}
+              onPaymentMethodChange={setPaymentMethod}
             />
-
-            {supplierId && (
-              <div style={styles.paymentToggleRow}>
-                <button
-                  style={{
-                    ...styles.paymentToggle,
-                    ...(paymentStatus === "paid"
-                      ? styles.paymentToggleActive
-                      : {}),
-                  }}
-                  onClick={() => setPaymentStatus("paid")}
-                >
-                  {t("paidNowOption")}
-                </button>
-                <button
-                  style={{
-                    ...styles.paymentToggle,
-                    ...(paymentStatus === "credit"
-                      ? styles.paymentToggleActiveCredit
-                      : {}),
-                  }}
-                  onClick={() => setPaymentStatus("credit")}
-                >
-                  {t("oweSupplierOption")}
-                </button>
-              </div>
-            )}
-
-            {supplierId && paymentStatus === "paid" && (
-              <div style={styles.methodRow}>
-                {PAYMENT_METHODS.map((m) => (
-                  <button
-                    key={m.value}
-                    style={{
-                      ...styles.methodChip,
-                      ...(paymentMethod === m.value
-                        ? styles.methodChipActive
-                        : {}),
-                    }}
-                    onClick={() => setPaymentMethod(m.value)}
-                  >
-                    {t(m.labelKey)}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
@@ -237,47 +183,6 @@ const styles = {
     fontSize: 14,
   },
   itemList: { overflow: "auto", marginBottom: 16 },
-  paymentToggleRow: { display: "flex", gap: 8, marginBottom: 10 },
-  paymentToggle: {
-    flex: 1,
-    padding: "9px 0",
-    borderRadius: 10,
-    borderWidth: "1.5px",
-    borderStyle: "solid",
-    borderColor: "var(--border)",
-    background: "var(--surface)",
-    color: "var(--text-secondary)",
-    fontWeight: 700,
-    fontSize: 12,
-  },
-  paymentToggleActive: {
-    background: "var(--success-light)",
-    borderColor: "var(--success)",
-    color: "var(--success)",
-  },
-  paymentToggleActiveCredit: {
-    background: "var(--danger-light)",
-    borderColor: "var(--danger)",
-    color: "var(--danger)",
-  },
-  methodRow: { display: "flex", gap: 6, marginTop: 8 },
-  methodChip: {
-    flex: 1,
-    padding: "8px 0",
-    borderRadius: 10,
-    borderWidth: "1.5px",
-    borderStyle: "solid",
-    borderColor: "var(--border)",
-    background: "var(--surface)",
-    color: "var(--text-secondary)",
-    fontWeight: 600,
-    fontSize: 11,
-  },
-  methodChipActive: {
-    background: "var(--primary-light)",
-    borderColor: "var(--primary)",
-    color: "var(--primary-dark)",
-  },
   totalRow: {
     display: "flex",
     justifyContent: "space-between",

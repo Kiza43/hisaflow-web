@@ -2,17 +2,8 @@ import React, { useState, useEffect } from "react";
 import { dataService } from "../services/dataService";
 import { supplierService } from "../services/supplierService";
 import { blockInvalidNumberKeys } from "../utils/numberInput";
-import SupplierPicker from "./SupplierPicker.jsx";
+import SupplierPaymentSection from "./SupplierPaymentSection.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
-
-// Cash, bank transfer, or Lipa Namba (Tanzanian mobile money merchant
-// payment) — exactly the three ways shop owners actually pay suppliers,
-// per direct customer feedback.
-const PAYMENT_METHODS = [
-  { value: "cash", labelKey: "cashMethodOption" },
-  { value: "bank_transfer", labelKey: "bankTransferMethodOption" },
-  { value: "lipa_namba", labelKey: "lipaNambaMethodOption" },
-];
 
 const AddStockModal = ({ visible, product, onSave, onClose }) => {
   const { t } = useLanguage();
@@ -107,67 +98,16 @@ const AddStockModal = ({ visible, product, onSave, onClose }) => {
 
         <div style={styles.hint}>{t("addStockPriceHint")}</div>
 
-        <label style={styles.label}>{t("supplierOptionalLabel")}</label>
-        <SupplierPicker
+        <SupplierPaymentSection
           suppliers={suppliers}
-          selectedSupplierId={supplierId}
-          onSelect={setSupplierId}
-          onSupplierAdded={(newSupplier) => {
-            setSuppliers((prev) => [...prev, newSupplier]);
-            setSupplierId(newSupplier.id);
-          }}
+          onSuppliersChange={setSuppliers}
+          supplierId={supplierId}
+          onSupplierChange={setSupplierId}
+          paymentStatus={paymentStatus}
+          onPaymentStatusChange={setPaymentStatus}
+          paymentMethod={paymentMethod}
+          onPaymentMethodChange={setPaymentMethod}
         />
-
-        {supplierId && (
-          <div style={styles.paymentToggleRow}>
-            <button
-              style={{
-                ...styles.paymentToggle,
-                ...(paymentStatus === "paid" ? styles.paymentToggleActive : {}),
-              }}
-              onClick={() => setPaymentStatus("paid")}
-            >
-              {t("paidNowOption")}
-            </button>
-            <button
-              style={{
-                ...styles.paymentToggle,
-                ...(paymentStatus === "credit"
-                  ? styles.paymentToggleActiveCredit
-                  : {}),
-              }}
-              onClick={() => setPaymentStatus("credit")}
-            >
-              {t("oweSupplierOption")}
-            </button>
-          </div>
-        )}
-
-        {/* Recording how stock was paid for doesn't require a supplier
-            first — "owe supplier" needs someone to owe, but "I paid cash
-            for this" is true whether or not a formal supplier record
-            exists for a one-off purchase. */}
-        {(!supplierId || paymentStatus === "paid") && (
-          <>
-            <label style={styles.label}>{t("paymentMethodLabel")}</label>
-            <div style={styles.methodRow}>
-              {PAYMENT_METHODS.map((m) => (
-                <button
-                  key={m.value}
-                  style={{
-                    ...styles.methodChip,
-                    ...(paymentMethod === m.value
-                      ? styles.methodChipActive
-                      : {}),
-                  }}
-                  onClick={() => setPaymentMethod(m.value)}
-                >
-                  {t(m.labelKey)}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
 
         <div style={styles.actions}>
           <button style={styles.cancelBtn} onClick={onClose}>
@@ -232,52 +172,6 @@ const styles = {
     color: "var(--text-muted)",
     marginBottom: 18,
     marginTop: -8,
-  },
-  paymentToggleRow: {
-    display: "flex",
-    gap: 8,
-    marginBottom: 14,
-    marginTop: -6,
-  },
-  paymentToggle: {
-    flex: 1,
-    padding: "9px 0",
-    borderRadius: 10,
-    borderWidth: "1.5px",
-    borderStyle: "solid",
-    borderColor: "var(--border)",
-    background: "var(--surface)",
-    color: "var(--text-secondary)",
-    fontWeight: 700,
-    fontSize: 12,
-  },
-  paymentToggleActive: {
-    background: "var(--success-light)",
-    borderColor: "var(--success)",
-    color: "var(--success)",
-  },
-  paymentToggleActiveCredit: {
-    background: "var(--danger-light)",
-    borderColor: "var(--danger)",
-    color: "var(--danger)",
-  },
-  methodRow: { display: "flex", gap: 6, marginBottom: 14, marginTop: -6 },
-  methodChip: {
-    flex: 1,
-    padding: "8px 0",
-    borderRadius: 10,
-    borderWidth: "1.5px",
-    borderStyle: "solid",
-    borderColor: "var(--border)",
-    background: "var(--surface)",
-    color: "var(--text-secondary)",
-    fontWeight: 600,
-    fontSize: 11,
-  },
-  methodChipActive: {
-    background: "var(--primary-light)",
-    borderColor: "var(--primary)",
-    color: "var(--primary-dark)",
   },
   actions: { display: "flex", gap: 10 },
   cancelBtn: {

@@ -34,9 +34,11 @@ const ProductCard = ({
   onAddToCart,
   onAddStock,
   onAddToRestockCart,
-  onNotifyPastBuyers,
   onViewBatches,
   lowStockThreshold = 10,
+  selectMode,
+  isSelected,
+  onToggleSelect,
 }) => {
   const { t } = useLanguage();
   const stock = product.stock || 0;
@@ -52,9 +54,23 @@ const ProductCard = ({
   const expiryInfo = getExpiryInfo(product.expiryDate);
 
   return (
-    <div className="hf-card" style={styles.card}>
+    <div
+      className="hf-card"
+      style={{
+        ...styles.card,
+        ...(selectMode && isSelected ? styles.cardSelected : {}),
+      }}
+    >
       <div style={styles.headerRow}>
         <div style={styles.identity}>
+          {selectMode && (
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={() => onToggleSelect(product.id)}
+              style={styles.checkbox}
+            />
+          )}
           {product.imageUri ? (
             <img src={product.imageUri} alt="" style={styles.thumb} />
           ) : (
@@ -72,14 +88,6 @@ const ProductCard = ({
           </div>
         </div>
         <div style={styles.headerActions}>
-          {onNotifyPastBuyers && (
-            <button
-              style={styles.textLink}
-              onClick={() => onNotifyPastBuyers(product)}
-            >
-              {t("sendReminderButton")}
-            </button>
-          )}
           <button style={styles.textLink} onClick={() => onEdit(product)}>
             {t("editButton")}
           </button>
@@ -168,6 +176,11 @@ const styles = {
     padding: 20,
     border: "1px solid var(--border-muted)",
   },
+  cardSelected: {
+    border: "1.5px solid var(--primary)",
+    background: "var(--primary-light)",
+  },
+  checkbox: { width: 18, height: 18, flexShrink: 0, cursor: "pointer" },
   headerRow: {
     display: "flex",
     justifyContent: "space-between",

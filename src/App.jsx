@@ -6,14 +6,15 @@ import ProductsScreen from "./screens/ProductsScreen.jsx";
 import SalesScreen from "./screens/SalesScreen.jsx";
 import OrdersScreen from "./screens/OrdersScreen.jsx";
 import CreditScreen from "./screens/CreditScreen.jsx";
+import ReceivablesAgingScreen from "./screens/ReceivablesAgingScreen.jsx";
 import CustomersScreen from "./screens/CustomersScreen.jsx";
 import ExpensesScreen from "./screens/ExpensesScreen.jsx";
 import SuppliersScreen from "./screens/SuppliersScreen.jsx";
 import StaffScreen from "./screens/StaffScreen.jsx";
 import ActivityLogScreen from "./screens/ActivityLogScreen.jsx";
 import SettingsScreen from "./screens/SettingsScreen.jsx";
+import Sidebar from "./components/Sidebar.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
-import Sidebar from "./components/SideBar.jsx";
 import { RestockCartProvider } from "./context/RestockCartContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { dataService } from "./services/dataService";
@@ -35,6 +36,7 @@ const SCREEN_PERMISSIONS = {
   sales: "manageSales",
   orders: "manageSales",
   credit: "manageCredit",
+  receivablesAging: "manageCredit",
   customers: "manageCredit",
   expenses: "manageExpenses",
   suppliers: "manageSuppliers",
@@ -255,6 +257,8 @@ const App = () => {
                 {activeScreen === "credit" && canAccess("credit") && (
                   <CreditScreen />
                 )}
+                {activeScreen === "receivablesAging" &&
+                  canAccess("receivablesAging") && <ReceivablesAgingScreen />}
                 {activeScreen === "customers" && canAccess("customers") && (
                   <CustomersScreen />
                 )}

@@ -18,6 +18,7 @@ const OrdersScreen = ({ currentUser, onNavigate }) => {
   const { addToCart, updateQuantity } = useCart();
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
+  const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [viewingOrder, setViewingOrder] = useState(null);
@@ -28,13 +29,16 @@ const OrdersScreen = ({ currentUser, onNavigate }) => {
   const loadOrders = () => orderService.getOrders().then(setOrders);
 
   useEffect(() => {
-    Promise.all([orderService.getOrders(), dataService.getProducts()]).then(
-      ([o, p]) => {
-        setOrders(o);
-        setProducts(p);
-        setLoading(false);
-      },
-    );
+    Promise.all([
+      orderService.getOrders(),
+      dataService.getProducts(),
+      dataService.getSettings(),
+    ]).then(([o, p, s]) => {
+      setOrders(o);
+      setProducts(p);
+      setSettings(s);
+      setLoading(false);
+    });
   }, []);
 
   const handleCreateOrder = async (payload) => {
@@ -206,6 +210,7 @@ const OrdersScreen = ({ currentUser, onNavigate }) => {
       <OrderTicketModal
         visible={!!viewingOrder}
         order={viewingOrder}
+        settings={settings}
         onClose={() => setViewingOrder(null)}
       />
 

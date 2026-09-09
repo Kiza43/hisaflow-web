@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { importService, IMPORT_FIELDS } from "../services/importService.js";
-import { batchService } from "../services/batchService.js";
-import { dataService } from "../services/dataService.js";
+import { importService, IMPORT_FIELDS } from "../services/importService";
+import { batchService } from "../services/batchService";
+import { dataService } from "../services/dataService";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import StepIndicator from "./StepIndicator.jsx";
 
 // Four steps — upload, map columns, preview, then actually import —
 // because a real existing spreadsheet's column names never match this
@@ -164,31 +165,11 @@ const ImportProductsModal = ({
         <h2 style={styles.title}>{t("importProductsTitle")}</h2>
 
         {step < 3 && (
-          <>
-            <div style={styles.stepRow}>
-              {STEPS.slice(0, 3).map((key, i) => (
-                <React.Fragment key={key}>
-                  <div
-                    style={{
-                      ...styles.stepDot,
-                      ...(i <= step ? styles.stepDotActive : {}),
-                    }}
-                  >
-                    {i < step ? "✓" : i + 1}
-                  </div>
-                  {i < 2 && (
-                    <div
-                      style={{
-                        ...styles.stepLine,
-                        ...(i < step ? styles.stepLineActive : {}),
-                      }}
-                    />
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-            <div style={styles.stepIndicatorText}>{stepLabel(step)}</div>
-          </>
+          <StepIndicator
+            steps={STEPS.slice(0, 3)}
+            currentStep={step}
+            stepLabel={stepLabel}
+          />
         )}
 
         {error && <div style={styles.error}>{error}</div>}
@@ -365,35 +346,6 @@ const styles = {
     overflow: "auto",
   },
   title: { fontSize: 18, fontWeight: 800, marginBottom: 16 },
-  stepRow: { display: "flex", alignItems: "center", marginBottom: 8 },
-  stepDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 999,
-    background: "var(--border-muted)",
-    color: "var(--text-muted)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 800,
-    flexShrink: 0,
-  },
-  stepDotActive: { background: "var(--primary)", color: "white" },
-  stepLine: {
-    flex: 1,
-    height: 2,
-    background: "var(--border-muted)",
-    margin: "0 4px",
-  },
-  stepLineActive: { background: "var(--primary)" },
-  stepIndicatorText: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "var(--text-muted)",
-    textAlign: "center",
-    marginBottom: 18,
-  },
   error: {
     background: "var(--danger-light)",
     color: "var(--danger)",

@@ -38,6 +38,7 @@ const Sidebar = ({
     { key: "sales", label: t("navSales") },
     { key: "orders", label: t("navOrders") },
     { key: "credit", label: t("navCredit") },
+    { key: "receivablesAging", label: t("navReceivablesAging") },
     { key: "customers", label: t("navCustomers") },
     { key: "expenses", label: t("navExpenses") },
     { key: "suppliers", label: t("navSuppliers") },

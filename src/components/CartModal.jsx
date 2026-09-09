@@ -4,6 +4,7 @@ import { salesService } from "../services/salesService";
 import { creditService } from "../services/creditService";
 import { dataService } from "../services/dataService";
 import CartItemRow from "./CartItemRow.jsx";
+import StepIndicator from "./StepIndicator.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const formatTZS = (amount) => {
@@ -165,29 +166,7 @@ const CartModal = ({ visible, onClose, onCompleted }) => {
           </button>
         </div>
 
-        <div style={styles.stepRow}>
-          {STEPS.map((key, i) => (
-            <React.Fragment key={key}>
-              <div
-                style={{
-                  ...styles.stepDot,
-                  ...(i <= step ? styles.stepDotActive : {}),
-                }}
-              >
-                {i < step ? "✓" : i + 1}
-              </div>
-              {i < STEPS.length - 1 && (
-                <div
-                  style={{
-                    ...styles.stepLine,
-                    ...(i < step ? styles.stepLineActive : {}),
-                  }}
-                />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-        <div style={styles.stepIndicatorText}>{stepLabel(step)}</div>
+        <StepIndicator steps={STEPS} currentStep={step} stepLabel={stepLabel} />
 
         {error && <div style={styles.error}>{error}</div>}
 
@@ -433,35 +412,6 @@ const styles = {
     border: "none",
     fontSize: 16,
     color: "var(--text-secondary)",
-  },
-  stepRow: { display: "flex", alignItems: "center", marginBottom: 8 },
-  stepDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 999,
-    background: "var(--border-muted)",
-    color: "var(--text-muted)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 800,
-    flexShrink: 0,
-  },
-  stepDotActive: { background: "var(--primary)", color: "white" },
-  stepLine: {
-    flex: 1,
-    height: 2,
-    background: "var(--border-muted)",
-    margin: "0 4px",
-  },
-  stepLineActive: { background: "var(--primary)" },
-  stepIndicatorText: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "var(--text-muted)",
-    textAlign: "center",
-    marginBottom: 14,
   },
   error: {
     background: "var(--danger-light)",

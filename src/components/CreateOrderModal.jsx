@@ -3,20 +3,15 @@ import { blockInvalidNumberKeys } from "../utils/numberInput";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 // Writes up an order ticket for a customer before they reach the
-// cashier — issuedBy comes from whoever is actually logged in right
-// now, not a free-text field, since the point of this feature is real
-// accountability for who promised what.
-const CreateOrderModal = ({
-  visible,
-  products,
-  currentUser,
-  onCreate,
-  onClose,
-}) => {
+// cashier. issuedBy is a plain free-text field — whoever is physically
+// writing up the order types their own name, so the owner's wife or
+// sibling can issue an order without needing their own staff login.
+const CreateOrderModal = ({ visible, products, onCreate, onClose }) => {
   const { t } = useLanguage();
   const [items, setItems] = useState([]);
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
+  const [issuedBy, setIssuedBy] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [error, setError] = useState("");
@@ -65,6 +60,7 @@ const CreateOrderModal = ({
     setItems([]);
     setProductId("");
     setQuantity("1");
+    setIssuedBy("");
     setCustomerName("");
     setCustomerPhone("");
     setError("");
@@ -77,11 +73,15 @@ const CreateOrderModal = ({
       setError(t("addAtLeastOneItemError"));
       return;
     }
+    if (!issuedBy.trim()) {
+      setError(t("issuedByRequiredError"));
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       const result = await onCreate({
-        issuedBy: currentUser?.name || "",
+        issuedBy: issuedBy.trim(),
         customerName: customerName.trim() || null,
         customerPhone: customerPhone.trim() || null,
         items,
@@ -156,6 +156,14 @@ const CreateOrderModal = ({
             </div>
           </div>
         )}
+
+        <label style={styles.label}>{t("issuedByLabel")}</label>
+        <input
+          style={styles.input}
+          value={issuedBy}
+          onChange={(e) => setIssuedBy(e.target.value)}
+          placeholder={t("issuedByPlaceholder")}
+        />
 
         <label style={styles.label}>{t("customerNameOptionalLabel")}</label>
         <input

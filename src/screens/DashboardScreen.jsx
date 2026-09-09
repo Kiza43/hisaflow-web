@@ -7,6 +7,9 @@ import ReportModal from "../components/ReportModal.jsx";
 import WeeklyRecapModal from "../components/WeeklyRecapModal.jsx";
 import StockAlertBanner from "../components/StockAlertBanner.jsx";
 import ExpiryAlertBanner from "../components/ExpiryAlertBanner.jsx";
+import OverdueReceivablesBanner from "../components/OverdueReceivablesBanner.jsx";
+import PendingOrdersBanner from "../components/PendingOrdersBanner.jsx";
+import { orderService } from "../services/orderService";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const formatTZS = (amount) => {
@@ -22,6 +25,7 @@ const DashboardScreen = ({ onNavigate }) => {
   const [sales, setSales] = useState([]);
   const [creditSales, setCreditSales] = useState([]);
   const [expenditures, setExpenditures] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [showReport, setShowReport] = useState(false);
   const [showRecap, setShowRecap] = useState(false);
   const [period, setPeriod] = useState("today");
@@ -42,6 +46,7 @@ const DashboardScreen = ({ onNavigate }) => {
     dataService.getSales().then(setSales);
     dataService.getCreditSales().then(setCreditSales);
     dataService.getExpenditures().then(setExpenditures);
+    orderService.getOrders().then(setOrders);
   }, []);
 
   const periodLabel = (p) => {
@@ -134,6 +139,14 @@ const DashboardScreen = ({ onNavigate }) => {
           <ExpiryAlertBanner
             products={products}
             onPress={() => onNavigate("products", { expiryFilter: "expired" })}
+          />
+          <OverdueReceivablesBanner
+            creditSales={creditSales}
+            onPress={() => onNavigate("receivablesAging")}
+          />
+          <PendingOrdersBanner
+            orders={orders}
+            onPress={() => onNavigate("orders")}
           />
         </>
       )}
